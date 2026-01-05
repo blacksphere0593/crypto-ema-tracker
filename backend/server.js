@@ -35,7 +35,7 @@ const BINANCE_INTERVALS = {
 async function getKlines(symbol, interval = '1d', limit = 500) {
   try {
     const binanceInterval = BINANCE_INTERVALS[interval] || interval;
-    // Use Binance international API (requires VPN if in US)
+    // Use Binance API (accessible from Singapore region)
     const url = `https://api.binance.com/api/v3/klines`;
     const response = await axios.get(url, {
       params: {
