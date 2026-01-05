@@ -17,6 +17,24 @@ const {
 } = require('./nlpParser');
 
 /**
+ * Extract support/resistance filter from query
+ * Examples: "4hema200 as support", "coins at 1d ma100 as resistance"
+ */
+function extractSupportResistanceFilter(query) {
+  const normalized = query.toLowerCase();
+
+  if (/\bas\s+support\b/i.test(normalized) || /\bsupport\b/i.test(normalized)) {
+    return 'support';
+  }
+
+  if (/\bas\s+resistance\b/i.test(normalized) || /\bresistance\b/i.test(normalized)) {
+    return 'resistance';
+  }
+
+  return null;
+}
+
+/**
  * Detect if query uses AND or OR logic
  */
 function detectLogic(query) {
@@ -232,15 +250,29 @@ function extractAllIndicators(query) {
   const separator = logic === 'OR' ? /\s+or\s+/i : /\s+and\s+/i;
   const parts = query.split(separator);
 
+  // Get global support/resistance filter
+  const globalSRFilter = extractSupportResistanceFilter(query);
+
   parts.forEach(part => {
     const partNorm = part.toLowerCase();
 
-    // Extract comparison for this part (above/below)
+    // Extract comparison for this part (above/below/at)
     let comparison = 'above'; // default
-    if (/\bbelow\b|</i.test(partNorm)) {
+    if (/\bbelow\b/i.test(partNorm) && !/</i.test(partNorm)) {
       comparison = 'below';
-    } else if (/\babove\b|>/i.test(partNorm)) {
+    } else if (/\bat\b/i.test(partNorm)) {
+      comparison = 'at';
+    } else if (/\babove\b/i.test(partNorm) && !/>/i.test(partNorm)) {
       comparison = 'above';
+    } else if (/</.test(partNorm)) {
+      comparison = 'below';
+    } else if (/>/.test(partNorm)) {
+      comparison = 'above';
+    }
+
+    // If support/resistance is mentioned, default comparison to "at"
+    if (globalSRFilter && comparison === 'above') {
+      comparison = 'at';
     }
 
     // Pattern: optional timeframe + (ma|ema) + number
@@ -277,7 +309,8 @@ function extractAllIndicators(query) {
         timeframe: timeframe,
         indicator: indicator,
         period: period,
-        comparison: comparison
+        comparison: comparison,
+        supportResistanceFilter: globalSRFilter
       });
     }
   });
@@ -431,5 +464,6 @@ module.exports = {
   parseComplexQuery,
   validateComplexQuery,
   extractAllIndicators,
-  detectLogic
+  detectLogic,
+  extractSupportResistanceFilter
 };

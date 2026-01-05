@@ -3,6 +3,22 @@
 import { useState } from 'react';
 import React from 'react';
 
+interface CoinDetail {
+  symbol: string;
+  results: {
+    [key: string]: {
+      price: number;
+      volume: number;
+      indicatorValue: number;
+      aboveIndicator: boolean;
+      belowIndicator: boolean;
+      atIndicator?: boolean;
+      diffPercent?: number;
+      supportResistance?: 'support' | 'resistance' | null;
+    };
+  };
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -10,6 +26,7 @@ interface Message {
   count?: number;
   total?: number;
   processingTime?: string;
+  details?: CoinDetail[];
   parsed?: {
     intent?: string;
     coin?: string;
@@ -24,6 +41,7 @@ interface Message {
       indicator: string;
       period: number;
       comparison?: string;
+      supportResistanceFilter?: 'support' | 'resistance' | null;
     }>;
     positioning?: {
       type: 'between' | 'comparison' | 'price_between' | 'order';
@@ -110,6 +128,7 @@ export default function Home() {
         total: data.total,
         processingTime: data.processingTime,
         parsed: data.parsed,
+        details: data.details || [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -193,6 +212,17 @@ export default function Home() {
                 </code>
                 <code className="block bg-gray-900 px-4 py-2 rounded text-cyan-400">
                   coins where 1d (ma100, ema200, ma300) in ascending order
+                </code>
+
+                <p className="text-gray-400 text-xs mt-3">At Indicator (Support/Resistance):</p>
+                <code className="block bg-gray-900 px-4 py-2 rounded text-amber-400">
+                  show me coins at 4hema200
+                </code>
+                <code className="block bg-gray-900 px-4 py-2 rounded text-green-400">
+                  4hema200 as support
+                </code>
+                <code className="block bg-gray-900 px-4 py-2 rounded text-red-400">
+                  1d MA100 as resistance
                 </code>
               </div>
             </div>
@@ -304,9 +334,22 @@ export default function Home() {
                         {msg.parsed.indicators.map((ind, i) => (
                           <span
                             key={i}
-                            className="bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded border border-indigo-700"
+                            className={`px-2 py-1 rounded border ${
+                              ind.comparison === 'at'
+                                ? 'bg-amber-900/50 text-amber-300 border-amber-700'
+                                : 'bg-indigo-900/50 text-indigo-300 border-indigo-700'
+                            }`}
                           >
                             {ind.comparison} {ind.timeframe} {ind.indicator.toUpperCase()}{ind.period}
+                            {ind.supportResistanceFilter && (
+                              <span className={`ml-1 px-1 rounded text-xs font-bold ${
+                                ind.supportResistanceFilter === 'support'
+                                  ? 'bg-green-600 text-white'
+                                  : 'bg-red-600 text-white'
+                              }`}>
+                                {ind.supportResistanceFilter.toUpperCase()}
+                              </span>
+                            )}
                           </span>
                         ))}
                         {msg.parsed.logic && msg.parsed.indicators.length > 1 && (
@@ -336,14 +379,40 @@ export default function Home() {
                         📊 Matching Tickers ({msg.tickers.length}):
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {msg.tickers.map((ticker) => (
-                          <span
-                            key={ticker}
-                            className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md hover:shadow-lg transition-shadow"
-                          >
-                            {ticker.replace('USDT', '')}
-                          </span>
-                        ))}
+                        {msg.details && msg.details.length > 0 ? (
+                          msg.details.map((coin: CoinDetail) => {
+                            // Find first indicator result with support/resistance info
+                            const firstResult = Object.values(coin.results)[0];
+                            const srLabel = firstResult?.supportResistance;
+
+                            return (
+                              <span
+                                key={coin.symbol}
+                                className="relative bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md hover:shadow-lg transition-shadow"
+                              >
+                                {coin.symbol.replace('USDT', '')}
+                                {srLabel && (
+                                  <span className={`absolute -top-2 -right-2 text-xs px-1 py-0.5 rounded font-bold ${
+                                    srLabel === 'support'
+                                      ? 'bg-green-400 text-green-900'
+                                      : 'bg-red-400 text-red-900'
+                                  }`}>
+                                    {srLabel === 'support' ? 'S' : 'R'}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })
+                        ) : (
+                          msg.tickers.map((ticker) => (
+                            <span
+                              key={ticker}
+                              className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md hover:shadow-lg transition-shadow"
+                            >
+                              {ticker.replace('USDT', '')}
+                            </span>
+                          ))
+                        )}
                       </div>
                     </div>
                   )}
@@ -386,7 +455,7 @@ export default function Home() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g., 4hEMA200 volume>5M"
+            placeholder="e.g., coins above 4h EMA200, or 1d MA100 as support"
             className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
             disabled={loading}
           />

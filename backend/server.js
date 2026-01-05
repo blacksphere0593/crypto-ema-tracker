@@ -26,6 +26,76 @@ const BINANCE_INTERVALS = {
 };
 
 /**
+ * Dynamic threshold percentages for "at" comparison by timeframe
+ * Higher timeframes get wider thresholds due to larger candle sizes
+ */
+const AT_THRESHOLDS = {
+  '15m': 0.0005,  // 0.05%
+  '1h':  0.001,   // 0.1%
+  '2h':  0.0015,  // 0.15%
+  '4h':  0.002,   // 0.2%
+  '12h': 0.003,   // 0.3%
+  '1d':  0.005,   // 0.5%
+  '3d':  0.007,   // 0.7%
+  '1w':  0.01     // 1.0%
+};
+
+/**
+ * Detect if price is at support or resistance level
+ * @param {Array<number>} closePrices - Array of close prices (most recent last)
+ * @param {Array<number>} indicatorValues - Array of indicator values
+ * @param {number} threshold - The "at" threshold percentage (as decimal)
+ * @returns {string|null} - 'support', 'resistance', or null
+ */
+function detectSupportResistanceLevel(closePrices, indicatorValues, threshold) {
+  // Need at least 4 data points (3 historical + current)
+  if (closePrices.length < 4 || indicatorValues.length < 4) {
+    return null;
+  }
+
+  const numCandlesToCheck = 3;
+  let allAbove = true;
+  let allBelow = true;
+
+  // Check last 3 candles (excluding current)
+  for (let i = 1; i <= numCandlesToCheck; i++) {
+    const priceIdx = closePrices.length - 1 - i;
+    const indIdx = indicatorValues.length - 1 - i;
+
+    if (priceIdx < 0 || indIdx < 0) {
+      return null;
+    }
+
+    const price = closePrices[priceIdx];
+    const indValue = indicatorValues[indIdx];
+
+    // Calculate percentage difference
+    const diffPercent = (price - indValue) / indValue;
+
+    // Check if cleanly above (beyond threshold)
+    if (diffPercent <= threshold) {
+      allAbove = false;
+    }
+    // Check if cleanly below (beyond threshold)
+    if (diffPercent >= -threshold) {
+      allBelow = false;
+    }
+  }
+
+  // If all previous candles were cleanly above -> testing support
+  if (allAbove) {
+    return 'support';
+  }
+  // If all previous candles were cleanly below -> testing resistance
+  if (allBelow) {
+    return 'resistance';
+  }
+
+  // Mixed/choppy - just "at" without label
+  return null;
+}
+
+/**
  * Fetch OHLCV data from Binance API
  * @param {string} symbol - Trading pair (e.g., 'BTCUSDT')
  * @param {string} interval - Timeframe (e.g., '1h', '1d')
@@ -56,17 +126,19 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
  * Get coin data with indicators calculated
  * @param {string} symbol - Trading pair
  * @param {Array} indicators - Array of {timeframe, indicator, period}
+ * @param {boolean} detectSupportResistance - Whether to detect support/resistance
  * @returns {Promise<Object|null>} - Coin data with indicators
  */
-async function getCoinData(symbol, indicators) {
+async function getCoinData(symbol, indicators, detectSupportResistance = false) {
   const results = {};
 
   for (const ind of indicators) {
     const { timeframe, indicator, period } = ind;
     const key = `${timeframe}_${indicator}${period}`;
 
-    // Calculate required candles
-    const requiredCandles = getRequiredCandles(period);
+    // Calculate required candles - add extra for support/resistance detection
+    const baseCandles = getRequiredCandles(period);
+    const requiredCandles = detectSupportResistance ? baseCandles + 5 : baseCandles;
 
     // Fetch klines
     const klines = await getKlines(symbol, timeframe, requiredCandles);
@@ -88,12 +160,27 @@ async function getCoinData(symbol, indicators) {
       const indicatorValues = await calculateIndicator(closePrices, indicator, period);
       const currentIndicatorValue = indicatorValues[indicatorValues.length - 1];
 
+      // Calculate "at" threshold check
+      const atThreshold = AT_THRESHOLDS[timeframe] || 0.002; // Default 0.2%
+      const diffPercent = Math.abs(currentPrice - currentIndicatorValue) / currentIndicatorValue;
+      const isAtIndicator = diffPercent <= atThreshold;
+
+      // Detect support/resistance if requested and price is at indicator
+      let supportResistance = null;
+      if (detectSupportResistance && isAtIndicator && indicatorValues.length >= 4) {
+        supportResistance = detectSupportResistanceLevel(closePrices, indicatorValues, atThreshold);
+      }
+
       results[key] = {
         price: currentPrice,
         volume: currentVolume,
         indicatorValue: currentIndicatorValue,
         aboveIndicator: currentPrice > currentIndicatorValue,
-        belowIndicator: currentPrice < currentIndicatorValue
+        belowIndicator: currentPrice < currentIndicatorValue,
+        atIndicator: isAtIndicator,
+        diffPercent: diffPercent,
+        supportResistance: supportResistance,
+        timeframe: timeframe
       };
     } catch (error) {
       console.error(`Error calculating ${indicator}${period} for ${symbol}:`, error.message);
@@ -110,6 +197,38 @@ async function getCoinData(symbol, indicators) {
     symbol: symbol,
     results: results
   };
+}
+
+/**
+ * Check if a result matches the indicator criteria
+ * @param {Object} result - Result object from getCoinData
+ * @param {Object} ind - Indicator criteria {comparison, supportResistanceFilter}
+ * @returns {boolean} - Whether the result matches
+ */
+function checkIndicatorMatch(result, ind) {
+  // First check comparison (above/below/at)
+  let comparisonMatch = false;
+
+  if (ind.comparison === 'above') {
+    comparisonMatch = result.aboveIndicator;
+  } else if (ind.comparison === 'below') {
+    comparisonMatch = result.belowIndicator;
+  } else if (ind.comparison === 'at') {
+    comparisonMatch = result.atIndicator;
+  }
+
+  if (!comparisonMatch) return false;
+
+  // Then check support/resistance filter if specified
+  if (ind.supportResistanceFilter) {
+    if (ind.supportResistanceFilter === 'support') {
+      return result.supportResistance === 'support';
+    } else if (ind.supportResistanceFilter === 'resistance') {
+      return result.supportResistance === 'resistance';
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -132,15 +251,7 @@ function filterCoins(coinDataList, parsedQuery) {
         const result = coinData.results[key];
 
         if (!result) return false;
-
-        // Check price vs indicator based on this indicator's comparison
-        if (ind.comparison === 'above') {
-          return result.aboveIndicator;
-        } else if (ind.comparison === 'below') {
-          return result.belowIndicator;
-        }
-
-        return false;
+        return checkIndicatorMatch(result, ind);
       });
     } else {
       // AND: ALL indicators must match (default)
@@ -149,15 +260,7 @@ function filterCoins(coinDataList, parsedQuery) {
         const result = coinData.results[key];
 
         if (!result) return false;
-
-        // Check price vs indicator based on this indicator's comparison
-        if (ind.comparison === 'above') {
-          return result.aboveIndicator;
-        } else if (ind.comparison === 'below') {
-          return result.belowIndicator;
-        }
-
-        return false;
+        return checkIndicatorMatch(result, ind);
       });
     }
   });
@@ -552,9 +655,14 @@ app.post('/api/query', async (req, res) => {
     // Use indicators from parsed query (supports multiple indicators now)
     const indicators = parsed.indicators;
 
+    // Determine if support/resistance detection is needed
+    const needsSupportResistance = indicators.some(
+      ind => ind.comparison === 'at' || ind.supportResistanceFilter
+    );
+
     // Fetch data for all coins
     const startTime = Date.now();
-    const promises = coins.map(symbol => getCoinData(symbol, indicators));
+    const promises = coins.map(symbol => getCoinData(symbol, indicators, needsSupportResistance));
     const results = await Promise.all(promises);
     const fetchTime = Date.now() - startTime;
 
