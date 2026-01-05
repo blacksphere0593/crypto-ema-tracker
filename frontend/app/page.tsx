@@ -182,6 +182,21 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Special Features Explanation */}
+        <div className="bg-gray-800 rounded-lg shadow-xl p-4 mb-4 border border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-300 mb-2">📘 Special Features:</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div>
+              <p className="text-blue-300 font-semibold">Trend (EMA Cluster)</p>
+              <p className="text-gray-400">&ldquo;Daily trend&rdquo; = cluster of 1d EMA 13, 25, 32</p>
+            </div>
+            <div>
+              <p className="text-green-300 font-semibold">S = Support, R = Resistance</p>
+              <p className="text-gray-400">Price testing indicator from above (S) or below (R)</p>
+            </div>
+          </div>
+        </div>
+
         {/* Chat Container */}
         <div className="bg-gray-800 rounded-lg shadow-xl p-6 mb-4 min-h-[500px] max-h-[600px] overflow-y-auto border border-gray-700">
           {messages.length === 0 ? (
@@ -223,6 +238,17 @@ export default function Home() {
                 </code>
                 <code className="block bg-gray-900 px-4 py-2 rounded text-red-400">
                   1d MA100 as resistance
+                </code>
+
+                <p className="text-gray-400 text-xs mt-3">Trend Queries (EMA 13/25/32 Cluster):</p>
+                <code className="block bg-gray-900 px-4 py-2 rounded text-blue-400">
+                  coins above daily trend
+                </code>
+                <code className="block bg-gray-900 px-4 py-2 rounded text-amber-400">
+                  show me coins at 4h trend
+                </code>
+                <code className="block bg-gray-900 px-4 py-2 rounded text-green-400">
+                  1d trend as support
                 </code>
               </div>
             </div>

@@ -17,6 +17,43 @@ const {
 } = require('./nlpParser');
 
 /**
+ * Extract trend query (EMA 13/25/32 cluster)
+ * Examples: "daily trend", "4h trend", "above 1d trend", "coins at 4h trend as support"
+ */
+function extractTrendQuery(query) {
+  const normalized = query.toLowerCase();
+
+  // Pattern: [timeframe] trend [comparison]
+  const trendMatch = /(?:(\d+[mhdw]|daily|hourly|weekly)\s+)?trend/i.exec(normalized);
+
+  if (!trendMatch) return null;
+
+  let timeframe = trendMatch[1] || '1d';
+
+  // Normalize timeframe aliases
+  if (timeframe === 'daily') timeframe = '1d';
+  if (timeframe === 'hourly') timeframe = '1h';
+  if (timeframe === 'weekly') timeframe = '1w';
+  else {
+    timeframe = timeframe.toLowerCase();
+    if (!VALID_TIMEFRAMES.includes(timeframe)) {
+      timeframe = '1d';
+    }
+  }
+
+  return {
+    isTrend: true,
+    timeframe: timeframe,
+    // Expand to EMA 13, 25, 32
+    indicators: [
+      { timeframe, indicator: 'ema', period: 13 },
+      { timeframe, indicator: 'ema', period: 25 },
+      { timeframe, indicator: 'ema', period: 32 }
+    ]
+  };
+}
+
+/**
  * Extract support/resistance filter from query
  * Examples: "4hema200 as support", "coins at 1d ma100 as resistance"
  */
@@ -236,11 +273,14 @@ function detectPricePosition(query, numIndicators) {
 
 /**
  * Extract ALL indicators with their conditions from query
- * Returns array of {timeframe, indicator, period, comparison}
+ * Returns array of {timeframe, indicator, period, comparison, isCluster}
  */
 function extractAllIndicators(query) {
   const normalized = query.toLowerCase();
   const indicators = [];
+
+  // Check for "trend" keyword first
+  const trendQuery = extractTrendQuery(query);
 
   // Pattern to match: [timeframe] [indicator][period] with optional "above/below"
   // Examples: "1d MA100", "above 4h EMA200", "below daily ma100"
@@ -255,6 +295,41 @@ function extractAllIndicators(query) {
 
   parts.forEach(part => {
     const partNorm = part.toLowerCase();
+
+    // Check if this part contains "trend" keyword
+    const hasTrend = /trend/i.test(partNorm);
+
+    if (hasTrend && trendQuery) {
+      // Extract comparison for trend
+      let comparison = 'above'; // default
+      if (/\bbelow\b/i.test(partNorm)) {
+        comparison = 'below';
+      } else if (/\bat\b/i.test(partNorm)) {
+        comparison = 'at';
+      } else if (/\babove\b/i.test(partNorm)) {
+        comparison = 'above';
+      }
+
+      // If support/resistance is mentioned, default comparison to "at"
+      if (globalSRFilter && comparison === 'above') {
+        comparison = 'at';
+      }
+
+      // Add all 3 EMAs from trend cluster
+      trendQuery.indicators.forEach(ind => {
+        indicators.push({
+          timeframe: ind.timeframe,
+          indicator: ind.indicator,
+          period: ind.period,
+          comparison: comparison,
+          supportResistanceFilter: globalSRFilter,
+          isCluster: true,
+          clusterTimeframe: trendQuery.timeframe
+        });
+      });
+
+      return; // Skip normal indicator extraction for this part
+    }
 
     // Extract comparison for this part (above/below/at)
     let comparison = 'above'; // default

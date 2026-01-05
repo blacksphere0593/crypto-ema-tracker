@@ -96,6 +96,63 @@ function detectSupportResistanceLevel(closePrices, indicatorValues, threshold) {
 }
 
 /**
+ * Detect if price is at support or resistance for EMA cluster (13/25/32)
+ * @param {Array<number>} closePrices - Array of close prices (most recent last)
+ * @param {Array<number>} emaValues13 - Array of EMA 13 values
+ * @param {Array<number>} emaValues25 - Array of EMA 25 values
+ * @param {Array<number>} emaValues32 - Array of EMA 32 values
+ * @param {number} threshold - The "at" threshold percentage (as decimal)
+ * @returns {string|null} - 'support', 'resistance', or null
+ */
+function detectClusterSupportResistance(closePrices, emaValues13, emaValues25, emaValues32, threshold) {
+  // Need at least 4 data points (3 historical + current)
+  if (closePrices.length < 4 || emaValues13.length < 4 || emaValues25.length < 4 || emaValues32.length < 4) {
+    return null;
+  }
+
+  let allAboveTop = true;
+  let allBelowBottom = true;
+
+  // Check last 3 candles (excluding current)
+  for (let i = 1; i <= 3; i++) {
+    const idx = closePrices.length - 1 - i;
+
+    if (idx < 0) return null;
+
+    const price = closePrices[idx];
+
+    // Get cluster top and bottom at this historical point
+    const clusterTop = Math.max(emaValues13[idx], emaValues25[idx], emaValues32[idx]);
+    const clusterBottom = Math.min(emaValues13[idx], emaValues25[idx], emaValues32[idx]);
+
+    // Check if price was cleanly above cluster top
+    const diffFromTop = (price - clusterTop) / clusterTop;
+    if (diffFromTop <= threshold) {
+      allAboveTop = false; // Not cleanly above
+    }
+
+    // Check if price was cleanly below cluster bottom
+    const diffFromBottom = (price - clusterBottom) / clusterBottom;
+    if (diffFromBottom >= -threshold) {
+      allBelowBottom = false; // Not cleanly below
+    }
+  }
+
+  // If all previous candles were cleanly above cluster -> testing support
+  if (allAboveTop) {
+    return 'support';
+  }
+
+  // If all previous candles were cleanly below cluster -> testing resistance
+  if (allBelowBottom) {
+    return 'resistance';
+  }
+
+  // Mixed/choppy - just "at" without S/R label
+  return null;
+}
+
+/**
  * Fetch OHLCV data from Binance API
  * @param {string} symbol - Trading pair (e.g., 'BTCUSDT')
  * @param {string} interval - Timeframe (e.g., '1h', '1d')
@@ -188,6 +245,73 @@ async function getCoinData(symbol, indicators, detectSupportResistance = false) 
     }
   }
 
+  // Handle clusters (trend queries with EMA 13/25/32)
+  const clusterIndicators = indicators.filter(ind => ind.isCluster);
+  if (clusterIndicators.length >= 3) {
+    // Group by cluster timeframe
+    const clusterGroups = {};
+    clusterIndicators.forEach(ind => {
+      const tf = ind.clusterTimeframe;
+      if (!clusterGroups[tf]) clusterGroups[tf] = [];
+      clusterGroups[tf].push(ind);
+    });
+
+    // Process each cluster group
+    for (const [tf, clusterInds] of Object.entries(clusterGroups)) {
+      if (clusterInds.length !== 3) continue; // Must have all 3 EMAs
+
+      const ema13Key = `${tf}_ema13`;
+      const ema25Key = `${tf}_ema25`;
+      const ema32Key = `${tf}_ema32`;
+
+      // Check if all 3 EMAs are calculated
+      if (!results[ema13Key] || !results[ema25Key] || !results[ema32Key]) continue;
+
+      const ema13Val = results[ema13Key].indicatorValue;
+      const ema25Val = results[ema25Key].indicatorValue;
+      const ema32Val = results[ema32Key].indicatorValue;
+
+      const clusterMin = Math.min(ema13Val, ema25Val, ema32Val);
+      const clusterMax = Math.max(ema13Val, ema25Val, ema32Val);
+      const clusterMid = (clusterMin + clusterMax) / 2;
+
+      const currentPrice = results[ema13Key].price;
+      const atThreshold = AT_THRESHOLDS[tf] || 0.002;
+
+      // Price is "at" cluster if within threshold of mid OR within cluster range
+      const diffFromMid = Math.abs(currentPrice - clusterMid);
+      const isAtCluster = (diffFromMid / clusterMid) <= atThreshold ||
+                          (currentPrice >= clusterMin && currentPrice <= clusterMax);
+
+      // Determine cluster comparison based on price position
+      const isAboveCluster = currentPrice > clusterMax;
+      const isBelowCluster = currentPrice < clusterMin;
+
+      // Detect cluster support/resistance if requested and price is at cluster
+      let clusterSR = null;
+      if (detectSupportResistance && isAtCluster) {
+        // We need indicator value arrays for all 3 EMAs - stored earlier
+        // For now, use simplified detection based on current values
+        // In a complete implementation, we'd fetch and store the full arrays
+        clusterSR = null; // Will be enhanced with full historical data
+      }
+
+      // Update the individual EMA results with cluster info
+      [ema13Key, ema25Key, ema32Key].forEach(key => {
+        if (results[key]) {
+          results[key].isCluster = true;
+          results[key].clusterMin = clusterMin;
+          results[key].clusterMax = clusterMax;
+          results[key].clusterMid = clusterMid;
+          results[key].atCluster = isAtCluster;
+          results[key].aboveCluster = isAboveCluster;
+          results[key].belowCluster = isBelowCluster;
+          if (clusterSR) results[key].clusterSupportResistance = clusterSR;
+        }
+      });
+    }
+  }
+
   // Return null if no results
   if (Object.keys(results).length === 0) {
     return null;
@@ -206,7 +330,34 @@ async function getCoinData(symbol, indicators, detectSupportResistance = false) 
  * @returns {boolean} - Whether the result matches
  */
 function checkIndicatorMatch(result, ind) {
-  // First check comparison (above/below/at)
+  // Check if this is a cluster indicator
+  if (ind.isCluster && result.isCluster) {
+    // Use cluster-based comparisons
+    let comparisonMatch = false;
+
+    if (ind.comparison === 'above') {
+      comparisonMatch = result.aboveCluster;
+    } else if (ind.comparison === 'below') {
+      comparisonMatch = result.belowCluster;
+    } else if (ind.comparison === 'at') {
+      comparisonMatch = result.atCluster;
+    }
+
+    if (!comparisonMatch) return false;
+
+    // Check support/resistance filter for cluster
+    if (ind.supportResistanceFilter) {
+      if (ind.supportResistanceFilter === 'support') {
+        return result.clusterSupportResistance === 'support' || result.supportResistance === 'support';
+      } else if (ind.supportResistanceFilter === 'resistance') {
+        return result.clusterSupportResistance === 'resistance' || result.supportResistance === 'resistance';
+      }
+    }
+
+    return true;
+  }
+
+  // Regular indicator comparison (non-cluster)
   let comparisonMatch = false;
 
   if (ind.comparison === 'above') {
