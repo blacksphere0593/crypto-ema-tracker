@@ -249,9 +249,9 @@ export default function Home() {
                                 <span className="bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded border border-indigo-700">
                                   {ind.timeframe} {ind.indicator.toUpperCase()}{ind.period}
                                 </span>
-                                {i < msg.parsed.positioning.indicators!.length - 1 && (
+                                {i < msg.parsed!.positioning!.indicators!.length - 1 && (
                                   <span className="bg-yellow-900/50 text-yellow-300 px-1 py-1 rounded font-bold">
-                                    {msg.parsed.positioning.orderType === 'ascending' ? '<' : '>'}
+                                    {msg.parsed!.positioning!.orderType === 'ascending' ? '<' : '>'}
                                   </span>
                                 )}
                               </React.Fragment>
