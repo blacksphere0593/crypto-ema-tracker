@@ -64,6 +64,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showColdStartMessage, setShowColdStartMessage] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +74,12 @@ export default function Home() {
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+    setShowColdStartMessage(false);
+
+    // Show cold start message after 5 seconds
+    const coldStartTimer = setTimeout(() => {
+      setShowColdStartMessage(true);
+    }, 5000);
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -90,6 +97,7 @@ export default function Home() {
           content: data.error || data.message || 'Error processing query',
         };
         setMessages((prev) => [...prev, errorMessage]);
+        clearTimeout(coldStartTimer);
         setLoading(false);
         return;
       }
@@ -112,7 +120,9 @@ export default function Home() {
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
+      clearTimeout(coldStartTimer);
       setLoading(false);
+      setShowColdStartMessage(false);
     }
   };
 
@@ -348,10 +358,22 @@ export default function Home() {
               {loading && (
                 <div className="bg-gray-900/60 p-4 rounded-lg mr-auto max-w-[85%] border border-gray-700">
                   <p className="text-xs font-semibold mb-2 text-gray-400">🤖 Assistant</p>
-                  <p className="text-gray-300 flex items-center gap-2">
-                    <span className="animate-pulse">⏳</span>
-                    Analyzing top 100 coins...
-                  </p>
+                  {!showColdStartMessage ? (
+                    <p className="text-gray-300 flex items-center gap-2">
+                      <span className="animate-pulse">⏳</span>
+                      Analyzing top 100 coins...
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-gray-300 flex items-center gap-2">
+                        <span className="animate-spin">🔄</span>
+                        Waking up backend...
+                      </p>
+                      <p className="text-yellow-400 text-xs">
+                        ⚡ First request may take up to 50 seconds (free tier limitation)
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
