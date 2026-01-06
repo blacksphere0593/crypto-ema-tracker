@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import React from 'react';
+import Link from 'next/link';
 
 interface CoinDetail {
   symbol: string;
@@ -159,9 +160,15 @@ export default function Home() {
           <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
             Crypto MA/EMA Tracker
           </h1>
-          <p className="text-gray-400 text-sm">
+          <p className="text-gray-400 text-sm mb-4">
             Query top 100 coins across multiple timeframes and indicators
           </p>
+          <Link
+            href="/alerts"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 rounded-lg transition-colors text-sm"
+          >
+            <span>🔔</span> Configure Alerts
+          </Link>
         </div>
 
         {/* Info Panel */}

@@ -24,6 +24,9 @@ yarn-error.log*
 .env.local
 .env.production
 
+# Alerts config (contains Telegram bot token)
+backend/alerts.json
+
 # IDE
 .vscode/
 .idea/

@@ -4,6 +4,7 @@ const axios = require('axios');
 const { parseComplexQuery, validateComplexQuery } = require('./nlpParserV2');
 const { calculateIndicator, getRequiredCandles } = require('./indicators');
 const { getCoins } = require('./coins');
+const alertManager = require('./alertManager');
 
 const app = express();
 const PORT = 3001;
@@ -905,10 +906,158 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
+// ========== Alert API Endpoints ==========
+
+/**
+ * Get all alerts
+ * GET /api/alerts
+ */
+app.get('/api/alerts', (req, res) => {
+  res.json({
+    alerts: alertManager.getAlerts(),
+    count: alertManager.getAlerts().length
+  });
+});
+
+/**
+ * Create a new alert
+ * POST /api/alerts
+ */
+app.post('/api/alerts', (req, res) => {
+  try {
+    const alert = alertManager.createAlert(req.body);
+    res.status(201).json({
+      message: 'Alert created successfully',
+      alert
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: 'Error creating alert',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Update an alert
+ * PUT /api/alerts/:id
+ */
+app.put('/api/alerts/:id', (req, res) => {
+  const alert = alertManager.updateAlert(req.params.id, req.body);
+
+  if (!alert) {
+    return res.status(404).json({
+      message: 'Alert not found'
+    });
+  }
+
+  res.json({
+    message: 'Alert updated successfully',
+    alert
+  });
+});
+
+/**
+ * Delete an alert
+ * DELETE /api/alerts/:id
+ */
+app.delete('/api/alerts/:id', (req, res) => {
+  const success = alertManager.deleteAlert(req.params.id);
+
+  if (!success) {
+    return res.status(404).json({
+      message: 'Alert not found'
+    });
+  }
+
+  res.json({
+    message: 'Alert deleted successfully'
+  });
+});
+
+/**
+ * Get Telegram connection status
+ * GET /api/alerts/telegram
+ */
+app.get('/api/alerts/telegram', (req, res) => {
+  res.json(alertManager.getTelegramStatus());
+});
+
+/**
+ * Setup Telegram bot token
+ * POST /api/alerts/telegram
+ */
+app.post('/api/alerts/telegram', (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({
+      message: 'Token is required'
+    });
+  }
+
+  const result = alertManager.setTelegramToken(token);
+  res.json(result);
+});
+
+/**
+ * Get alert settings
+ * GET /api/alerts/settings
+ */
+app.get('/api/alerts/settings', (req, res) => {
+  res.json(alertManager.getSettings());
+});
+
+/**
+ * Update alert settings
+ * PUT /api/alerts/settings
+ */
+app.put('/api/alerts/settings', (req, res) => {
+  const settings = alertManager.updateSettings(req.body);
+  res.json({
+    message: 'Settings updated successfully',
+    settings
+  });
+});
+
+/**
+ * Get list of coins for dropdown
+ * GET /api/coins
+ */
+app.get('/api/coins', async (req, res) => {
+  try {
+    const coins = await getCoins(100);
+    res.json({
+      coins: coins.map(c => c.replace('USDT', ''))
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error fetching coins',
+      error: error.message
+    });
+  }
+});
+
+// ========== Server Startup ==========
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Endpoints:`);
-  console.log(`  POST /api/query - Process crypto queries`);
-  console.log(`  GET  /api/info  - Get supported indicators`);
-  console.log(`  GET  /health    - Health check`);
+  console.log(`  POST /api/query    - Process crypto queries`);
+  console.log(`  GET  /api/info     - Get supported indicators`);
+  console.log(`  GET  /health       - Health check`);
+  console.log(`  GET  /api/alerts   - List alerts`);
+  console.log(`  POST /api/alerts   - Create alert`);
+
+  // Initialize alert manager with getCoinData function
+  alertManager.setGetCoinDataFn(getCoinData);
+
+  // Setup Telegram bot if token exists
+  const telegramStatus = alertManager.getTelegramStatus();
+  if (telegramStatus.configured) {
+    alertManager.setupTelegramBot(alertManager.getTelegramToken());
+  }
+
+  // Start alert checker
+  alertManager.startChecker();
 });

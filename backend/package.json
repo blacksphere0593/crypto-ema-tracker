@@ -11,7 +11,9 @@
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "axios": "^1.6.2",
-    "tulind": "^0.8.20"
+    "tulind": "^0.8.20",
+    "node-telegram-bot-api": "^0.64.0",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
