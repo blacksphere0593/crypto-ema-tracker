@@ -38,6 +38,12 @@ class AlertManager {
         this.saveConfig();
         console.log('Created new alerts config file');
       }
+
+      // Override with environment variable if set (for persistence across deployments)
+      if (process.env.TELEGRAM_BOT_TOKEN) {
+        this.config.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+        console.log('Using Telegram bot token from environment variable');
+      }
     } catch (error) {
       console.error('Error loading alerts config:', error.message);
       this.config = { ...DEFAULT_CONFIG };

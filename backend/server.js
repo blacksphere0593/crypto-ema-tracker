@@ -1091,10 +1091,13 @@ app.listen(PORT, () => {
   // Initialize alert manager with getCoinData function
   alertManager.setGetCoinDataFn(getCoinData);
 
-  // Setup Telegram bot if token exists
-  const telegramStatus = alertManager.getTelegramStatus();
-  if (telegramStatus.configured) {
-    alertManager.setupTelegramBot(alertManager.getTelegramToken());
+  // Setup Telegram bot if token exists (from env var or alerts.json)
+  const telegramToken = alertManager.getTelegramToken();
+  if (telegramToken) {
+    console.log('Setting up Telegram bot...');
+    alertManager.setupTelegramBot(telegramToken);
+  } else {
+    console.log('No Telegram bot token configured. Set TELEGRAM_BOT_TOKEN env var or configure via UI.');
   }
 
   // Start alert checker
