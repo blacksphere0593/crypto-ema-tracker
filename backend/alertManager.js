@@ -217,6 +217,7 @@ class AlertManager {
 
   /**
    * Send notification via Telegram
+   * Phase 1: Now includes transition info when price crosses threshold
    */
   async sendNotification(alert, result) {
     if (!this.bot || !this.config.telegramChatId) {
@@ -236,15 +237,21 @@ class AlertManager {
 
       const srLabel = result.supportResistance ? ` [${result.supportResistance.toUpperCase()}]` : '';
 
+      // Phase 1: Add transition info to message
+      let transitionMsg = '';
+      if (result.transitioned && result.previousState) {
+        transitionMsg = `\n🔄 Crossed from *${result.previousState}* → *${result.currentState}*`;
+      }
+
       const message =
         `🚨 *Alert Triggered!*\n\n` +
-        `*${result.symbol}* is ${alert.condition} ${indicator}${srLabel}\n\n` +
+        `*${result.symbol}* is ${alert.condition} ${indicator}${srLabel}${transitionMsg}\n\n` +
         `💰 Price: $${result.price.toLocaleString()}\n` +
         `📊 Indicator: $${result.indicatorValue.toLocaleString()}\n` +
         `📈 Diff: ${(result.diffPercent * 100).toFixed(2)}%`;
 
       await this.bot.sendMessage(this.config.telegramChatId, message, { parse_mode: 'Markdown' });
-      console.log(`Notification sent for ${result.symbol}`);
+      console.log(`Notification sent for ${result.symbol}${result.transitioned ? ' (state transition)' : ''}`);
       return true;
     } catch (error) {
       console.error('Error sending notification:', error.message);
@@ -253,7 +260,35 @@ class AlertManager {
   }
 
   /**
+   * Determine the current state for a coin/indicator combo
+   */
+  determineCurrentState(alert, result) {
+    if (alert.useTrend) {
+      if (result.aboveCluster) return 'above';
+      if (result.belowCluster) return 'below';
+      if (result.atCluster) return 'at';
+      return 'away';
+    } else {
+      if (result.aboveIndicator) return 'above';
+      if (result.belowIndicator) return 'below';
+      if (result.atIndicator) return 'at';
+      return 'away';
+    }
+  }
+
+  /**
+   * Check if condition matches for alert
+   */
+  conditionMatches(alert, currentState) {
+    if (alert.condition === 'above') return currentState === 'above';
+    if (alert.condition === 'below') return currentState === 'below';
+    if (alert.condition === 'at') return currentState === 'at';
+    return false;
+  }
+
+  /**
    * Evaluate a single alert against current market data
+   * Phase 1: Now includes state tracking for transition detection
    */
   async evaluateAlert(alert) {
     if (!this.getCoinDataFn) {
@@ -292,6 +327,7 @@ class AlertManager {
 
       // Check each coin
       const triggeredCoins = [];
+      const now = new Date().toISOString();
 
       for (const symbol of coinsToCheck) {
         const coinData = await this.getCoinDataFn(symbol, indicators, !!alert.srFilter);
@@ -300,71 +336,88 @@ class AlertManager {
 
         // Get the result for the indicator
         let result;
+        let indicatorValue;
+        let diffPercent;
+
         if (alert.useTrend) {
           // Use first cluster indicator result
           const key = `${alert.timeframe}_ema13`;
           result = coinData.results[key];
           if (!result) continue;
 
-          // Check cluster comparison
-          let matches = false;
-          if (alert.condition === 'above') {
-            matches = result.aboveCluster;
-          } else if (alert.condition === 'below') {
-            matches = result.belowCluster;
-          } else if (alert.condition === 'at') {
-            matches = result.atCluster;
-          }
-
-          if (!matches) continue;
-
-          // Check S/R filter if specified
-          if (alert.srFilter) {
-            if (result.clusterSupportResistance !== alert.srFilter &&
-                result.supportResistance !== alert.srFilter) {
-              continue;
-            }
-          }
-
-          triggeredCoins.push({
-            symbol: coinData.symbol,
-            price: result.price,
-            indicatorValue: result.clusterMid,
-            diffPercent: Math.abs(result.price - result.clusterMid) / result.clusterMid,
-            supportResistance: result.clusterSupportResistance || result.supportResistance
-          });
-
+          indicatorValue = result.clusterMid;
+          diffPercent = Math.abs(result.price - result.clusterMid) / result.clusterMid;
         } else {
           // Regular indicator
           const key = `${alert.timeframe}_${alert.indicator}${alert.period}`;
           result = coinData.results[key];
           if (!result) continue;
 
-          // Check comparison
-          let matches = false;
-          if (alert.condition === 'above') {
-            matches = result.aboveIndicator;
-          } else if (alert.condition === 'below') {
-            matches = result.belowIndicator;
-          } else if (alert.condition === 'at') {
-            matches = result.atIndicator;
-          }
-
-          if (!matches) continue;
-
-          // Check S/R filter if specified
-          if (alert.srFilter && result.supportResistance !== alert.srFilter) {
-            continue;
-          }
-
-          triggeredCoins.push({
-            symbol: coinData.symbol,
-            price: result.price,
-            indicatorValue: result.indicatorValue,
-            diffPercent: result.diffPercent,
-            supportResistance: result.supportResistance
-          });
+          indicatorValue = result.indicatorValue;
+          diffPercent = result.diffPercent;
         }
+
+        // Phase 1: Determine current state
+        const currentState = this.determineCurrentState(alert, result);
+        const lastState = alert.lastState;
+        const hasTransitioned = (lastState !== null && lastState !== currentState);
+        const conditionMet = this.conditionMatches(alert, currentState);
+
+        // Decide whether to trigger based on frequency
+        let shouldTrigger = false;
+
+        if (alert.frequency === 'once') {
+          // One-time: Trigger if condition is currently true (existing behavior)
+          shouldTrigger = conditionMet;
+        } else if (alert.frequency === 'repeat') {
+          // Repeat: Trigger only on STATE TRANSITION to the target condition
+          // This prevents spam when price stays above/below/at
+          if (lastState === null) {
+            // First check - trigger if condition met (initialize state)
+            shouldTrigger = conditionMet;
+          } else {
+            // Only trigger if we transitioned INTO the target state
+            shouldTrigger = hasTransitioned && conditionMet;
+          }
+        }
+
+        // Update alert state tracking (for single-coin alerts)
+        // For "any coin" alerts, we track globally, not per-coin
+        if (alert.coin !== 'any') {
+          alert.lastState = currentState;
+          alert.lastCheckedAt = now;
+          if (hasTransitioned) {
+            alert.lastStateChangedAt = now;
+          }
+        }
+
+        if (!shouldTrigger) continue;
+
+        // Check S/R filter if specified
+        if (alert.srFilter) {
+          const srMatch = alert.useTrend
+            ? (result.clusterSupportResistance === alert.srFilter || result.supportResistance === alert.srFilter)
+            : (result.supportResistance === alert.srFilter);
+          if (!srMatch) continue;
+        }
+
+        triggeredCoins.push({
+          symbol: coinData.symbol,
+          price: result.price,
+          indicatorValue: indicatorValue,
+          diffPercent: diffPercent,
+          supportResistance: alert.useTrend ? (result.clusterSupportResistance || result.supportResistance) : result.supportResistance,
+          // Phase 1: Include transition info in result
+          transitioned: hasTransitioned,
+          previousState: lastState,
+          currentState: currentState
+        });
+      }
+
+      // For "any coin" alerts, update state after evaluation
+      // (Just track that we checked, state doesn't apply globally)
+      if (alert.coin === 'any') {
+        alert.lastCheckedAt = now;
       }
 
       return {
@@ -422,17 +475,31 @@ class AlertManager {
   }
 
   /**
-   * Calculate milliseconds until next quarter hour (:00, :15, :30, :45)
+   * Phase 2: Calculate milliseconds until next 5-minute interval
+   * Phase 3: Add 1 minute offset to check after candle closes
+   * Check times: :01, :06, :11, :16, :21, :26, :31, :36, :41, :46, :51, :56
    */
-  getMillisUntilNextQuarter() {
+  getMillisUntilNextCheck() {
     const now = new Date();
     const minutes = now.getMinutes();
     const seconds = now.getSeconds();
     const ms = now.getMilliseconds();
 
-    // Find next quarter hour
-    const nextQuarter = Math.ceil((minutes + 1) / 15) * 15;
-    const minutesToWait = nextQuarter - minutes;
+    // Phase 3: Check times are 1 minute after each 5-min candle close
+    // Candles close at :00, :05, :10, :15, etc.
+    // We check at :01, :06, :11, :16, etc.
+    const checkTimes = [1, 6, 11, 16, 21, 26, 31, 36, 41, 46, 51, 56];
+
+    // Find next check time
+    let nextCheckMinute = checkTimes.find(t => t > minutes);
+    let minutesToWait;
+
+    if (nextCheckMinute !== undefined) {
+      minutesToWait = nextCheckMinute - minutes;
+    } else {
+      // Wrap to next hour (first check time is :01)
+      minutesToWait = (60 - minutes) + checkTimes[0];
+    }
 
     // Calculate total ms to wait (subtract current seconds and ms)
     const msToWait = (minutesToWait * 60 * 1000) - (seconds * 1000) - ms;
@@ -445,12 +512,14 @@ class AlertManager {
    */
   getNextCheckTime() {
     const now = new Date();
-    const msToWait = this.getMillisUntilNextQuarter();
+    const msToWait = this.getMillisUntilNextCheck();
     return new Date(now.getTime() + msToWait);
   }
 
   /**
-   * Start the periodic alert checker (runs at :00, :15, :30, :45)
+   * Phase 2 & 3: Start the periodic alert checker
+   * Runs at :01, :06, :11, :16, :21, :26, :31, :36, :41, :46, :51, :56
+   * (1 minute after each 5-min candle closes to use confirmed close price)
    */
   startChecker() {
     // Clear existing interval if any
@@ -461,15 +530,16 @@ class AlertManager {
       clearTimeout(this.initialCheckTimeout);
     }
 
-    const intervalMs = 15 * 60 * 1000; // Fixed 15 minutes
-    const msUntilNextQuarter = this.getMillisUntilNextQuarter();
+    const intervalMs = 5 * 60 * 1000; // Phase 2: 5 minutes instead of 15
+    const msUntilNextCheck = this.getMillisUntilNextCheck();
     const nextCheckTime = this.getNextCheckTime();
 
     console.log(`Alert checker starting...`);
-    console.log(`  Next check at: ${nextCheckTime.toISOString()} (in ${Math.round(msUntilNextQuarter / 1000)} seconds)`);
-    console.log(`  Then every 15 minutes at :00, :15, :30, :45`);
+    console.log(`  Next check at: ${nextCheckTime.toISOString()} (in ${Math.round(msUntilNextCheck / 1000)} seconds)`);
+    console.log(`  Then every 5 minutes at :01, :06, :11, :16, :21, :26, :31, :36, :41, :46, :51, :56`);
+    console.log(`  (1 min after candle close to ensure confirmed data)`);
 
-    // Wait until next quarter hour, then run
+    // Wait until next check time, then run
     this.initialCheckTimeout = setTimeout(async () => {
       console.log(`Running scheduled check at ${new Date().toISOString()}`);
       try {
@@ -479,7 +549,7 @@ class AlertManager {
         console.error('Scheduled alert check failed:', error.message);
       }
 
-      // Then run every 15 minutes
+      // Then run every 5 minutes
       this.checkInterval = setInterval(async () => {
         console.log(`Running scheduled check at ${new Date().toISOString()}`);
         try {
@@ -488,7 +558,7 @@ class AlertManager {
           console.error('Scheduled alert check failed:', error.message);
         }
       }, intervalMs);
-    }, msUntilNextQuarter);
+    }, msUntilNextCheck);
   }
 
   /**
@@ -530,6 +600,10 @@ class AlertManager {
       frequency: alertData.frequency || 'once',
       enabled: true,
       lastTriggered: null,
+      // Phase 1: State tracking fields
+      lastState: null,           // Last known state: "above" | "below" | "at" | "away" | null
+      lastStateChangedAt: null,  // ISO timestamp of last state change
+      lastCheckedAt: null,       // ISO timestamp of last check for this alert
       createdAt: new Date().toISOString()
     };
 

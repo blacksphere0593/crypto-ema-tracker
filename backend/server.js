@@ -182,6 +182,7 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
 
 /**
  * Get coin data with indicators calculated
+ * Phase 3: Uses last CLOSED candle to avoid false positives from incomplete candles
  * @param {string} symbol - Trading pair
  * @param {Array} indicators - Array of {timeframe, indicator, period}
  * @param {boolean} detectSupportResistance - Whether to detect support/resistance
@@ -195,28 +196,32 @@ async function getCoinData(symbol, indicators, detectSupportResistance = false) 
     const key = `${timeframe}_${indicator}${period}`;
 
     // Calculate required candles - add extra for support/resistance detection
+    // Phase 3: Add 1 extra candle so we can use the CLOSED candle (second-to-last)
     const baseCandles = getRequiredCandles(period);
-    const requiredCandles = detectSupportResistance ? baseCandles + 5 : baseCandles;
+    const requiredCandles = detectSupportResistance ? baseCandles + 6 : baseCandles + 1;
 
     // Fetch klines
     const klines = await getKlines(symbol, timeframe, requiredCandles);
 
-    if (!klines || klines.length === 0) {
-      console.error(`No data for ${symbol} ${timeframe}`);
+    if (!klines || klines.length < 2) {
+      console.error(`Insufficient data for ${symbol} ${timeframe}`);
       continue;
     }
 
     // Extract close prices
     const closePrices = klines.map(k => parseFloat(k[4]));
 
-    // Get current price and volume (in USDT - quote asset volume)
-    const currentPrice = closePrices[closePrices.length - 1];
-    const currentVolume = parseFloat(klines[klines.length - 1][7]); // Index 7 = Quote asset volume (USDT)
+    // Phase 3: Use second-to-last candle (last CLOSED candle) to avoid false positives
+    // The last candle (index -1) is incomplete and still in progress
+    // Using closed candles ensures we only trigger on confirmed price action
+    const currentPrice = closePrices[closePrices.length - 2];
+    const currentVolume = parseFloat(klines[klines.length - 2][7]); // Index 7 = Quote asset volume (USDT)
 
     // Calculate indicator
     try {
       const indicatorValues = await calculateIndicator(closePrices, indicator, period);
-      const currentIndicatorValue = indicatorValues[indicatorValues.length - 1];
+      // Phase 3: Use second-to-last indicator value (corresponding to closed candle)
+      const currentIndicatorValue = indicatorValues[indicatorValues.length - 2];
 
       // Calculate "at" threshold check
       const atThreshold = AT_THRESHOLDS[timeframe] || 0.002; // Default 0.2%
@@ -1053,7 +1058,7 @@ app.get('/api/alerts/status', (req, res) => {
 
   res.json({
     checkerRunning: !!alertManager.checkInterval || !!alertManager.initialCheckTimeout,
-    schedule: 'Fixed at :00, :15, :30, :45',
+    schedule: 'Every 5 min at :01, :06, :11, :16, :21, :26, :31, :36, :41, :46, :51, :56 (1 min after candle close)',
     totalAlerts: alerts.length,
     enabledAlerts: enabledAlerts.length,
     telegramConnected: telegramStatus.connected,
