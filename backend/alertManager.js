@@ -405,38 +405,73 @@ class AlertManager {
   }
 
   /**
-   * Start the periodic alert checker
+   * Calculate milliseconds until next quarter hour (:00, :15, :30, :45)
+   */
+  getMillisUntilNextQuarter() {
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const ms = now.getMilliseconds();
+
+    // Find next quarter hour
+    const nextQuarter = Math.ceil((minutes + 1) / 15) * 15;
+    const minutesToWait = nextQuarter - minutes;
+
+    // Calculate total ms to wait (subtract current seconds and ms)
+    const msToWait = (minutesToWait * 60 * 1000) - (seconds * 1000) - ms;
+
+    return msToWait;
+  }
+
+  /**
+   * Get next scheduled check time
+   */
+  getNextCheckTime() {
+    const now = new Date();
+    const msToWait = this.getMillisUntilNextQuarter();
+    return new Date(now.getTime() + msToWait);
+  }
+
+  /**
+   * Start the periodic alert checker (runs at :00, :15, :30, :45)
    */
   startChecker() {
     // Clear existing interval if any
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
+    if (this.initialCheckTimeout) {
+      clearTimeout(this.initialCheckTimeout);
+    }
 
-    const intervalMs = this.config.checkIntervalMinutes * 60 * 1000;
+    const intervalMs = 15 * 60 * 1000; // Fixed 15 minutes
+    const msUntilNextQuarter = this.getMillisUntilNextQuarter();
+    const nextCheckTime = this.getNextCheckTime();
 
-    // Run immediately on start (with slight delay to ensure all connections are ready)
-    console.log(`Starting alert checker (interval: ${this.config.checkIntervalMinutes} minutes)`);
+    console.log(`Alert checker starting...`);
+    console.log(`  Next check at: ${nextCheckTime.toISOString()} (in ${Math.round(msUntilNextQuarter / 1000)} seconds)`);
+    console.log(`  Then every 15 minutes at :00, :15, :30, :45`);
 
-    // Delay initial check by 5 seconds to allow Telegram bot to fully connect
-    setTimeout(async () => {
-      console.log('Running initial alert check...');
+    // Wait until next quarter hour, then run
+    this.initialCheckTimeout = setTimeout(async () => {
+      console.log(`Running scheduled check at ${new Date().toISOString()}`);
       try {
         await this.checkAlerts();
-        console.log('Initial alert check completed successfully');
-      } catch (error) {
-        console.error('Initial alert check failed:', error.message);
-      }
-    }, 5000);
-
-    // Then run periodically
-    this.checkInterval = setInterval(async () => {
-      try {
-        await this.checkAlerts();
+        console.log('Scheduled alert check completed successfully');
       } catch (error) {
         console.error('Scheduled alert check failed:', error.message);
       }
-    }, intervalMs);
+
+      // Then run every 15 minutes
+      this.checkInterval = setInterval(async () => {
+        console.log(`Running scheduled check at ${new Date().toISOString()}`);
+        try {
+          await this.checkAlerts();
+        } catch (error) {
+          console.error('Scheduled alert check failed:', error.message);
+        }
+      }, intervalMs);
+    }, msUntilNextQuarter);
   }
 
   /**
@@ -446,6 +481,10 @@ class AlertManager {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
+    }
+    if (this.initialCheckTimeout) {
+      clearTimeout(this.initialCheckTimeout);
+      this.initialCheckTimeout = null;
     }
   }
 

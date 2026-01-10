@@ -1048,18 +1048,19 @@ app.get('/api/alerts/status', (req, res) => {
   const alerts = alertManager.getAlerts();
   const enabledAlerts = alerts.filter(a => a.enabled);
   const telegramStatus = alertManager.getTelegramStatus();
+  const nextCheckTime = alertManager.getNextCheckTime();
+  const msUntilNext = nextCheckTime.getTime() - Date.now();
 
   res.json({
-    checkerRunning: !!alertManager.checkInterval,
-    checkIntervalMinutes: alertManager.config.checkIntervalMinutes,
+    checkerRunning: !!alertManager.checkInterval || !!alertManager.initialCheckTimeout,
+    schedule: 'Fixed at :00, :15, :30, :45',
     totalAlerts: alerts.length,
     enabledAlerts: enabledAlerts.length,
     telegramConnected: telegramStatus.connected,
     serverStartedAt: alertManager.serverStartedAt,
     lastCheckedAt: alertManager.lastCheckedAt,
-    nextCheckIn: alertManager.lastCheckedAt
-      ? Math.max(0, Math.round((new Date(alertManager.lastCheckedAt).getTime() + alertManager.config.checkIntervalMinutes * 60 * 1000 - Date.now()) / 1000)) + ' seconds'
-      : 'pending initial check'
+    nextCheckAt: nextCheckTime.toISOString(),
+    nextCheckIn: Math.max(0, Math.round(msUntilNext / 1000)) + ' seconds'
   });
 });
 
