@@ -39,10 +39,15 @@ class AlertManager {
         console.log('Created new alerts config file');
       }
 
-      // Override with environment variable if set (for persistence across deployments)
+      // Override with environment variables if set (for persistence across deployments)
       if (process.env.TELEGRAM_BOT_TOKEN) {
         this.config.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
         console.log('Using Telegram bot token from environment variable');
+      }
+
+      if (process.env.TELEGRAM_CHAT_ID) {
+        this.config.telegramChatId = process.env.TELEGRAM_CHAT_ID;
+        console.log('Using Telegram chat ID from environment variable');
       }
     } catch (error) {
       console.error('Error loading alerts config:', error.message);

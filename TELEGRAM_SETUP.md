@@ -11,7 +11,7 @@
    - Choose a username (e.g., "your_crypto_ema_bot")
 4. **Copy the bot token** (looks like: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
 
-### Step 2: Set Environment Variable on Render
+### Step 2: Set Bot Token on Render
 
 1. Go to **Render Dashboard**: https://dashboard.render.com/
 2. Click on your backend service: `crypto-ema-tracker`
@@ -23,28 +23,57 @@
    Value: [paste your bot token from BotFather]
    ```
 6. Click **Save Changes**
-7. **Important**: Render will automatically redeploy after adding env var
+7. **Important**: Render will automatically redeploy after adding env var (wait ~2-3 minutes)
 
-### Step 3: Connect to Your Bot
+### Step 3: Get Your Chat ID
 
-1. After Render redeploys (~2-3 minutes), go to your frontend:
-   - https://frontend-rose-ten-95.vercel.app/alerts
-
-2. You should see:
-   - ✓ Token configured
-   - ○ Bot connected (not connected yet)
-
-3. Open Telegram and find your bot:
+1. After Render redeploys (~2-3 minutes), open Telegram:
    - Search for `@your_bot_username`
    - Click on it
+   - Send `/start` to your bot
 
-4. Send `/start` to your bot
+2. Your bot will respond with:
+   ```
+   Connected! Your chat ID: 1234567890
 
-5. Refresh the alerts page:
-   - ✓ Token configured
-   - ✓ Bot connected
+   You will receive crypto alerts here.
 
-### Step 4: Create Alerts
+   Commands:
+   /status - Check bot status
+   /alerts - List active alerts
+   ```
+
+3. **Copy the chat ID** (the number shown)
+
+### Step 4: Set Chat ID on Render (For Permanent Persistence)
+
+1. Go back to **Render Dashboard** → Your service → **Environment**
+2. Click **Add Environment Variable**
+3. Add:
+   ```
+   Key: TELEGRAM_CHAT_ID
+   Value: [paste your chat ID from the /start response]
+   ```
+4. Click **Save Changes**
+5. Wait for redeploy (~2-3 minutes)
+
+### Step 5: Verify Full Setup
+
+After the redeploy, check status:
+```bash
+curl https://crypto-ema-tracker.onrender.com/api/alerts/telegram
+```
+
+Expected response:
+```json
+{
+  "configured": true,
+  "connected": true,
+  "chatId": "...1234"
+}
+```
+
+### Step 6: Create Alerts
 
 Now you can create alerts in the UI. They will be checked every 15 minutes.
 
@@ -52,15 +81,17 @@ Now you can create alerts in the UI. They will be checked every 15 minutes.
 
 ## ✅ What This Fixes
 
-**Before** (without env var):
+**Before** (without env vars):
 - ❌ Every deployment loses Telegram token
+- ❌ Every deployment loses chat ID
 - ❌ Must reconfigure token in UI after each deploy
 - ❌ Must send /start again after each deploy
 
-**After** (with env var):
-- ✅ Telegram token persists across deployments
-- ✅ Bot automatically reconnects on restart
-- ✅ Only need to send /start once (unless chatId changes)
+**After** (with both env vars):
+- ✅ Telegram token persists forever
+- ✅ Chat ID persists forever
+- ✅ Bot automatically reconnects on every restart
+- ✅ **Never need to send /start again!**
 - ⚠️ Alerts still need to be recreated after deployment (database needed for full persistence)
 
 ---
@@ -69,9 +100,10 @@ Now you can create alerts in the UI. They will be checked every 15 minutes.
 
 When you push new code to GitHub and Render redeploys:
 
-1. **Telegram Bot**: ✅ Automatically reconnects (token from env var)
-2. **Chat ID**: ✅ Persists (stored in alerts.json on Render disk)
-3. **Alerts**: ❌ Lost (need to recreate in UI)
+1. **Telegram Bot Token**: ✅ Automatically loads from `TELEGRAM_BOT_TOKEN` env var
+2. **Chat ID**: ✅ Automatically loads from `TELEGRAM_CHAT_ID` env var
+3. **Bot Connection**: ✅ Fully automatic, no user action needed
+4. **Alerts**: ❌ Lost (need to recreate in UI)
 
 **Why alerts are lost**:
 - alerts.json is not in git (contains sensitive data)
@@ -196,8 +228,8 @@ curl -X POST https://crypto-ema-tracker.onrender.com/api/alerts/check
 
 | Component | Status | Persists on Redeploy |
 |-----------|--------|---------------------|
-| Telegram Bot Token | ✅ Env Var | ✅ Yes |
-| Chat ID | ⚠️ JSON File | ⚠️ Usually (disk persists) |
+| Telegram Bot Token | ✅ Env Var | ✅ Yes (100%) |
+| Chat ID | ✅ Env Var | ✅ Yes (100%) |
 | Alert Configurations | ❌ JSON File | ❌ No |
 | Alert Settings (timezone, quiet hours) | ❌ JSON File | ❌ No |
 
