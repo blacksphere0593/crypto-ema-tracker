@@ -22,6 +22,8 @@ class AlertManager {
     this.bot = null;
     this.checkInterval = null;
     this.getCoinDataFn = null; // Will be set from server.js
+    this.lastCheckedAt = null; // Track when last check ran
+    this.serverStartedAt = new Date().toISOString();
     this.loadConfig();
   }
 
@@ -364,12 +366,14 @@ class AlertManager {
    */
   async checkAlerts() {
     const enabledAlerts = this.config.alerts.filter(a => a.enabled);
+    this.lastCheckedAt = new Date().toISOString();
 
     if (enabledAlerts.length === 0) {
+      console.log(`Alert check completed at ${this.lastCheckedAt} - no enabled alerts`);
       return;
     }
 
-    console.log(`Checking ${enabledAlerts.length} alerts...`);
+    console.log(`Checking ${enabledAlerts.length} alerts at ${this.lastCheckedAt}...`);
 
     for (const alert of enabledAlerts) {
       try {
@@ -411,13 +415,27 @@ class AlertManager {
 
     const intervalMs = this.config.checkIntervalMinutes * 60 * 1000;
 
-    // Run immediately on start
+    // Run immediately on start (with slight delay to ensure all connections are ready)
     console.log(`Starting alert checker (interval: ${this.config.checkIntervalMinutes} minutes)`);
-    this.checkAlerts();
+
+    // Delay initial check by 5 seconds to allow Telegram bot to fully connect
+    setTimeout(async () => {
+      console.log('Running initial alert check...');
+      try {
+        await this.checkAlerts();
+        console.log('Initial alert check completed successfully');
+      } catch (error) {
+        console.error('Initial alert check failed:', error.message);
+      }
+    }, 5000);
 
     // Then run periodically
-    this.checkInterval = setInterval(() => {
-      this.checkAlerts();
+    this.checkInterval = setInterval(async () => {
+      try {
+        await this.checkAlerts();
+      } catch (error) {
+        console.error('Scheduled alert check failed:', error.message);
+      }
     }, intervalMs);
   }
 

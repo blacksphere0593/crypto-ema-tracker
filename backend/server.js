@@ -1055,7 +1055,11 @@ app.get('/api/alerts/status', (req, res) => {
     totalAlerts: alerts.length,
     enabledAlerts: enabledAlerts.length,
     telegramConnected: telegramStatus.connected,
-    lastServerStart: new Date().toISOString()
+    serverStartedAt: alertManager.serverStartedAt,
+    lastCheckedAt: alertManager.lastCheckedAt,
+    nextCheckIn: alertManager.lastCheckedAt
+      ? Math.max(0, Math.round((new Date(alertManager.lastCheckedAt).getTime() + alertManager.config.checkIntervalMinutes * 60 * 1000 - Date.now()) / 1000)) + ' seconds'
+      : 'pending initial check'
   });
 });
 
