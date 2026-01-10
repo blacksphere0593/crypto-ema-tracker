@@ -87,10 +87,22 @@ class AlertManager {
     try {
       // Stop existing bot if running
       if (this.bot) {
-        this.bot.stopPolling();
+        try {
+          this.bot.stopPolling();
+        } catch (e) {
+          console.log('Error stopping previous bot instance:', e.message);
+        }
       }
 
-      this.bot = new TelegramBot(token, { polling: true });
+      this.bot = new TelegramBot(token, {
+        polling: {
+          interval: 1000,
+          autoStart: true,
+          params: {
+            timeout: 10
+          }
+        }
+      });
 
       // Handle /start command to capture chat ID
       this.bot.onText(/\/start/, (msg) => {
@@ -141,9 +153,14 @@ class AlertManager {
         this.bot.sendMessage(chatId, `Active Alerts:\n\n${alertList}`);
       });
 
-      // Handle errors
+      // Handle polling errors (common during deployments)
       this.bot.on('polling_error', (error) => {
-        console.error('Telegram polling error:', error.message);
+        // 409 Conflict is expected during deployments (old instance still running)
+        if (error.code === 'ETELEGRAM' && error.message.includes('409')) {
+          console.log('Telegram conflict detected (likely deployment overlap) - will retry automatically');
+        } else {
+          console.error('Telegram polling error:', error.message);
+        }
       });
 
       this.config.telegramBotToken = token;

@@ -1108,3 +1108,30 @@ app.listen(PORT, () => {
   // Start alert checker
   alertManager.startChecker();
 });
+
+// ========== Graceful Shutdown ==========
+
+// Handle shutdown signals to cleanly stop Telegram bot
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+
+  // Stop alert checker
+  alertManager.stopChecker();
+
+  // Stop Telegram bot polling
+  if (alertManager.bot) {
+    try {
+      alertManager.bot.stopPolling();
+      console.log('Telegram bot stopped');
+    } catch (error) {
+      console.error('Error stopping Telegram bot:', error.message);
+    }
+  }
+
+  // Exit process
+  process.exit(0);
+};
+
+// Listen for termination signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
