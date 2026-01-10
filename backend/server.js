@@ -1021,6 +1021,45 @@ app.put('/api/alerts/settings', (req, res) => {
 });
 
 /**
+ * Manually trigger alert check (for testing)
+ * POST /api/alerts/check
+ */
+app.post('/api/alerts/check', async (req, res) => {
+  try {
+    console.log('Manual alert check triggered via API');
+    await alertManager.checkAlerts();
+    res.json({
+      message: 'Alert check completed',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error checking alerts',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get alert checker status
+ * GET /api/alerts/status
+ */
+app.get('/api/alerts/status', (req, res) => {
+  const alerts = alertManager.getAlerts();
+  const enabledAlerts = alerts.filter(a => a.enabled);
+  const telegramStatus = alertManager.getTelegramStatus();
+
+  res.json({
+    checkerRunning: !!alertManager.checkInterval,
+    checkIntervalMinutes: alertManager.config.checkIntervalMinutes,
+    totalAlerts: alerts.length,
+    enabledAlerts: enabledAlerts.length,
+    telegramConnected: telegramStatus.connected,
+    lastServerStart: new Date().toISOString()
+  });
+});
+
+/**
  * Get list of coins for dropdown
  * GET /api/coins
  */
