@@ -160,19 +160,37 @@ function detectClusterSupportResistance(closePrices, emaValues13, emaValues25, e
  * @param {number} limit - Number of candles to fetch (max 1000)
  * @returns {Promise<Array|null>} - Klines data or null on error
  */
+// Simple in-memory cache for klines data (60 second TTL)
+const klinesCache = new Map();
+const CACHE_TTL = 60000; // 60 seconds
+
 async function getKlines(symbol, interval = '1d', limit = 500) {
+  const cacheKey = `${symbol}_${interval}_${limit}`;
+  const cached = klinesCache.get(cacheKey);
+
+  // Return cached data if still valid
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
   try {
     const binanceInterval = BINANCE_INTERVALS[interval] || interval;
-    // Use Binance API (accessible from Singapore region)
     const url = `https://fapi.binance.com/fapi/v1/klines`;
     const response = await axios.get(url, {
       params: {
         symbol: symbol,
         interval: binanceInterval,
-        limit: Math.min(limit, 1000) // Binance max is 1000
+        limit: Math.min(limit, 1000)
       },
-      timeout: 10000 // 10 second timeout
+      timeout: 10000
     });
+
+    // Cache the result
+    klinesCache.set(cacheKey, {
+      data: response.data,
+      timestamp: Date.now()
+    });
+
     return response.data;
   } catch (error) {
     console.error(`Error fetching ${symbol} ${interval}:`, error.message);
@@ -577,9 +595,9 @@ async function handleIndicatorPositioning(parsed, res) {
   // Get top 100 coins
   const coins = await getCoins(100);
 
-  // Fetch data for all coins in batches to avoid rate limiting
+  // Fetch data for all coins in batches (with caching, we can use larger batches)
   const startTime = Date.now();
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 25;
   const results = [];
 
   for (let i = 0; i < coins.length; i += BATCH_SIZE) {
@@ -587,10 +605,6 @@ async function handleIndicatorPositioning(parsed, res) {
     const batchPromises = batch.map(symbol => getCoinData(symbol, parsed.indicators));
     const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults);
-
-    if (i + BATCH_SIZE < coins.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
   }
   const fetchTime = Date.now() - startTime;
 
@@ -828,9 +842,9 @@ app.post('/api/query', async (req, res) => {
       ind => ind.comparison === 'at' || ind.supportResistanceFilter
     );
 
-    // Fetch data for all coins in batches to avoid rate limiting
+    // Fetch data for all coins in batches (with caching, we can use larger batches)
     const startTime = Date.now();
-    const BATCH_SIZE = 10; // Process 10 coins at a time
+    const BATCH_SIZE = 25; // 25 concurrent requests is safe (Binance allows 40/sec)
     const results = [];
 
     for (let i = 0; i < coins.length; i += BATCH_SIZE) {
@@ -838,11 +852,6 @@ app.post('/api/query', async (req, res) => {
       const batchPromises = batch.map(symbol => getCoinData(symbol, indicators, needsSupportResistance));
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
-
-      // Small delay between batches to avoid rate limiting
-      if (i + BATCH_SIZE < coins.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
     }
     const fetchTime = Date.now() - startTime;
 
