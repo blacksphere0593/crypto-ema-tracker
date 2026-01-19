@@ -8,7 +8,7 @@ async function debugVolume() {
   console.log('=== Debugging Volume for BTC 4h ===\n');
 
   try {
-    const url = 'https://api.binance.us/api/v3/klines';
+    const url = 'https://fapi.binance.com/fapi/v1/klines';
     const response = await axios.get(url, {
       params: {
         symbol: 'BTCUSDT',

@@ -24,11 +24,29 @@ function extractCoin(query) {
     'RIPPLE': 'XRP',
     'CARDANO': 'ADA',
     'DOGECOIN': 'DOGE',
-    'POLYGON': 'MATIC',
+    'POLYGON': 'POL',
     'POLKADOT': 'DOT',
     'AVALANCHE': 'AVAX',
     'CHAINLINK': 'LINK',
-    'LITECOIN': 'LTC'
+    'LITECOIN': 'LTC',
+    'TONCOIN': 'TON',
+    'PEPE': '1000PEPE',
+    'FLOKI': '1000FLOKI',
+    'SHIBA': '1000SHIB',
+    'ARBITRUM': 'ARB',
+    'OPTIMISM': 'OP',
+    'UNISWAP': 'UNI',
+    'AAVE': 'AAVE',
+    'MAKER': 'MKR',
+    'COSMOS': 'ATOM',
+    'NEAR': 'NEAR',
+    'INJECTIVE': 'INJ',
+    'SUI': 'SUI',
+    'SEI': 'SEI',
+    'JUPITER': 'JUP',
+    'RENDER': 'RENDER',
+    'FILECOIN': 'FIL',
+    'APTOS': 'APT'
   };
 
   // Check aliases first
@@ -119,8 +137,8 @@ function extractIndicator(query) {
     return 'ema';
   }
 
-  // Check for MA (handles "ma", "MA100", "moving average", etc.)
-  if (/\bma\d+|ma\s+\d+|\bma\b|moving\s*average/i.test(normalized)) {
+  // Check for MA/SMA (handles "ma", "sma", "MA100", "SMA100", "moving average", etc.)
+  if (/\b(?:s?ma)\d+|(?:s?ma)\s+\d+|\b(?:s?ma)\b|(?:simple\s+)?moving\s*average/i.test(normalized)) {
     return 'ma';
   }
 

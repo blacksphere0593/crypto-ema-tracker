@@ -10,12 +10,12 @@ const FALLBACK_TOP_100_COINS = [
   'ADAUSDT', 'DOGEUSDT', 'TRXUSDT', 'AVAXUSDT', 'LINKUSDT',
 
   // 11-20
-  'DOTUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT',
+  'DOTUSDT', 'POLUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT',
   'ETCUSDT', 'XLMUSDT', 'FILUSDT', 'APTUSDT', 'NEARUSDT',
 
   // 21-30
   'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT', 'SEIUSDT',
-  'VETUSDT', 'ALGOUSDT', 'ICPUSDT', 'RNDRUSDT', 'IMXUSDT',
+  'VETUSDT', 'ALGOUSDT', 'ICPUSDT', 'BCHUSDT', 'IMXUSDT',
 
   // 31-40
   'FTMUSDT', 'RUNEUSDT', 'LDOUSDT', 'AAVEUSDT', 'MKRUSDT',
@@ -23,15 +23,15 @@ const FALLBACK_TOP_100_COINS = [
 
   // 41-50
   'FLOWUSDT', 'SANDUSDT', 'AXSUSDT', 'CHZUSDT', 'MANAUSDT',
-  'TIAUSDT', 'APEUSDT', 'EGLDUSDT', 'THETAUSDT', 'EOSUSDT',
+  'TIAUSDT', 'APEUSDT', 'EGLDUSDT', 'THETAUSDT', 'TONUSDT',
 
   // 51-60
   'ARUSDT', 'XTZUSDT', 'COMPUSDT', 'MINAUSDT', 'CRVUSDT',
-  'BLURUSDT', 'FLOKIUSDT', 'GALAUSDT', 'PEPEUSDT', 'WLDUSDT',
+  'BLURUSDT', '1000FLOKIUSDT', 'GALAUSDT', '1000PEPEUSDT', 'WLDUSDT',
 
   // 61-70
   'CFXUSDT', 'ILVUSDT', 'LRCUSDT', 'GMTUSDT', 'ENJUSDT',
-  'GALUSDT', '1INCHUSDT', 'DYDXUSDT', 'ZILUSDT', 'KAVAUSDT',
+  'JUPUSDT', '1INCHUSDT', 'DYDXUSDT', 'ZILUSDT', 'KAVAUSDT',
 
   // 71-80
   'BELUSDT', 'JASMYUSDT', 'OCEANUSDT', 'SXPUSDT', 'CELOUSDT',
@@ -42,7 +42,7 @@ const FALLBACK_TOP_100_COINS = [
   'WAVESUSDT', 'LPTUSDT', 'OGNUSDT', 'SNXUSDT', 'RLCUSDT',
 
   // 91-100
-  'FETUSDT', 'BAKEUSDT', 'ANKRUSDT', 'AUDIOUSDT', 'CVCUSDT',
+  'FETUSDT', 'BAKEUSDT', 'ANKRUSDT', 'PYTHUSDT', 'CVCUSDT',
   'NEOUSDT', 'DASHUSDT', 'DENTUSDT', 'CKBUSDT', 'ZECUSDT'
 ];
 
@@ -60,7 +60,7 @@ async function fetchTop100ByVolume() {
     console.log('Fetching top 100 coins by volume from Binance...');
 
     // Fetch 24h ticker data for all USDT pairs
-    const url = 'https://api.binance.com/api/v3/ticker/24hr';
+    const url = 'https://fapi.binance.com/fapi/v1/ticker/24hr';
     const response = await axios.get(url, {
       timeout: 10000
     });

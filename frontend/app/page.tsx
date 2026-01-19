@@ -84,6 +84,15 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showColdStartMessage, setShowColdStartMessage] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+
+  const exampleQueries = [
+    'above 4h EMA200',
+    'below daily MA100',
+    'at 1d trend as support',
+    'price between 4h MA100 and EMA200',
+    '1d MA100 < EMA200 < MA300',
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,10 +104,9 @@ export default function Home() {
     setLoading(true);
     setShowColdStartMessage(false);
 
-    // Show cold start message after 5 seconds
     const coldStartTimer = setTimeout(() => {
       setShowColdStartMessage(true);
-    }, 5000);
+    }, 15000);
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -136,7 +144,7 @@ export default function Home() {
     } catch (error) {
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'Error connecting to server. Make sure the backend is running on port 3001.',
+        content: 'Error connecting to server. Make sure the backend is running.',
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -146,361 +154,316 @@ export default function Home() {
     }
   };
 
-  const formatVolume = (volume: number) => {
-    if (volume >= 1000000) {
-      return `${(volume / 1000000).toFixed(1)}M`;
-    }
-    return volume.toLocaleString();
+  const handleExampleClick = (query: string) => {
+    setInput(query);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8 px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
-            Crypto MA/EMA Tracker
-          </h1>
-          <p className="text-gray-400 text-sm mb-4">
-            Query top 100 coins across multiple timeframes and indicators
-          </p>
-          <Link
-            href="/alerts"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 rounded-lg transition-colors text-sm"
-          >
-            <span>🔔</span> Configure Alerts
-          </Link>
-        </div>
-
-        {/* Info Panel */}
-        <div className="bg-gray-800 rounded-lg shadow-xl p-4 mb-4 border border-gray-700">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-gray-400 font-semibold mb-1">MA Periods:</p>
-              <p className="text-blue-300">100, 300</p>
+    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+      {/* Header */}
+      <header className="border-b border-neutral-800">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
             </div>
-            <div>
-              <p className="text-gray-400 font-semibold mb-1">EMA Periods:</p>
-              <p className="text-purple-300">13, 25, 32, 200</p>
-            </div>
-            <div>
-              <p className="text-gray-400 font-semibold mb-1">Timeframes:</p>
-              <p className="text-green-300">15m, 1h, 2h, 4h, 12h, 1d, 3d, 1w</p>
-            </div>
+            <h1 className="text-lg font-semibold text-neutral-100">Crypto Scanner</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="px-3 py-1.5 text-sm text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors"
+            >
+              {showHelp ? 'Hide' : 'Help'}
+            </button>
+            <Link
+              href="/alerts"
+              className="px-3 py-1.5 text-sm text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              Alerts
+            </Link>
           </div>
         </div>
+      </header>
 
-        {/* Special Features Explanation */}
-        <div className="bg-gray-800 rounded-lg shadow-xl p-4 mb-4 border border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-300 mb-2">📘 Special Features:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <div>
-              <p className="text-blue-300 font-semibold">Trend (EMA Cluster)</p>
-              <p className="text-gray-400">&ldquo;Daily trend&rdquo; = cluster of 1d EMA 13, 25, 32</p>
-            </div>
-            <div>
-              <p className="text-green-300 font-semibold">S = Support, R = Resistance</p>
-              <p className="text-gray-400">Price testing indicator from above (S) or below (R)</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Chat Container */}
-        <div className="bg-gray-800 rounded-lg shadow-xl p-6 mb-4 min-h-[500px] max-h-[600px] overflow-y-auto border border-gray-700">
-          {messages.length === 0 ? (
-            <div className="text-center text-gray-400 mt-20">
-              <p className="text-lg mb-6">🚀 Start querying crypto data!</p>
-              <div className="space-y-2 text-sm">
-                <p className="text-gray-500 font-semibold mb-2">Examples:</p>
-
-                <p className="text-gray-400 text-xs mt-3">Price vs Indicators:</p>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-green-400">
-                  show coins above daily MA100 and EMA200 and MA300
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-blue-400">
-                  coins above 1h MA100 and below 1h EMA200
-                </code>
-
-                <p className="text-gray-400 text-xs mt-3">Indicator Positioning:</p>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-purple-400">
-                  4h MA100 between 1d EMA13 and 1d EMA25
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-yellow-400">
-                  price between 4h MA100 and 1d EMA200
-                </code>
-
-                <p className="text-gray-400 text-xs mt-3">Indicator Ordering:</p>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-pink-400">
-                  1d MA100 &lt; 1d EMA200 &lt; 1d MA300
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-cyan-400">
-                  coins where 1d (ma100, ema200, ma300) in ascending order
-                </code>
-
-                <p className="text-gray-400 text-xs mt-3">At Indicator (Support/Resistance):</p>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-amber-400">
-                  show me coins at 4hema200
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-green-400">
-                  4hema200 as support
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-red-400">
-                  1d MA100 as resistance
-                </code>
-
-                <p className="text-gray-400 text-xs mt-3">Trend Queries (EMA 13/25/32 Cluster):</p>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-blue-400">
-                  coins above daily trend
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-amber-400">
-                  show me coins at 4h trend
-                </code>
-                <code className="block bg-gray-900 px-4 py-2 rounded text-green-400">
-                  1d trend as support
-                </code>
+      <main className="max-w-4xl mx-auto px-4 py-6 flex flex-col" style={{ height: 'calc(100vh - 73px)' }}>
+        {/* Collapsible Help Panel */}
+        {showHelp && (
+          <div className="mb-4 p-4 bg-neutral-900 border border-neutral-800 rounded-lg text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-neutral-500 text-xs uppercase tracking-wide mb-1">Timeframes</p>
+                <p className="text-neutral-300 font-mono text-xs">15m, 1h, 2h, 4h, 12h, 1d, 3d, 1w</p>
+              </div>
+              <div>
+                <p className="text-neutral-500 text-xs uppercase tracking-wide mb-1">MA Periods</p>
+                <p className="text-neutral-300 font-mono text-xs">100, 300</p>
+              </div>
+              <div>
+                <p className="text-neutral-500 text-xs uppercase tracking-wide mb-1">EMA Periods</p>
+                <p className="text-neutral-300 font-mono text-xs">13, 25, 32, 200</p>
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`p-4 rounded-lg ${
-                    msg.role === 'user'
-                      ? 'bg-blue-900/40 ml-auto max-w-[85%] border border-blue-700/50'
-                      : 'bg-gray-900/60 mr-auto max-w-[85%] border border-gray-700'
-                  }`}
-                >
-                  <p className="text-xs font-semibold mb-2 text-gray-400">
-                    {msg.role === 'user' ? '👤 You' : '🤖 Assistant'}
-                  </p>
-                  <p className="text-gray-200 mb-2">{msg.content}</p>
-
-                  {/* Query Details - Indicator Positioning */}
-                  {msg.parsed && msg.parsed.intent === 'indicator_positioning' && msg.parsed.positioning && (
-                    <div className="mt-3 pt-3 border-t border-gray-700 text-xs">
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {msg.parsed.positioning.type === 'between' && (
-                          <>
-                            <span className="bg-purple-900/50 text-purple-300 px-2 py-1 rounded border border-purple-700">
-                              Target: {msg.parsed.positioning.target?.timeframe} {msg.parsed.positioning.target?.indicator.toUpperCase()}{msg.parsed.positioning.target?.period}
-                            </span>
-                            <span className="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded border border-yellow-700 font-bold">
-                              BETWEEN
-                            </span>
-                            <span className="bg-green-900/50 text-green-300 px-2 py-1 rounded border border-green-700">
-                              {msg.parsed.positioning.lower?.timeframe} {msg.parsed.positioning.lower?.indicator.toUpperCase()}{msg.parsed.positioning.lower?.period}
-                            </span>
-                            <span className="bg-gray-700 text-gray-300 px-2 py-1 rounded">AND</span>
-                            <span className="bg-green-900/50 text-green-300 px-2 py-1 rounded border border-green-700">
-                              {msg.parsed.positioning.upper?.timeframe} {msg.parsed.positioning.upper?.indicator.toUpperCase()}{msg.parsed.positioning.upper?.period}
-                            </span>
-                          </>
-                        )}
-
-                        {msg.parsed.positioning.type === 'price_between' && (
-                          <>
-                            <span className="bg-blue-900/50 text-blue-300 px-2 py-1 rounded border border-blue-700 font-bold">
-                              PRICE
-                            </span>
-                            <span className="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded border border-yellow-700 font-bold">
-                              BETWEEN
-                            </span>
-                            <span className="bg-green-900/50 text-green-300 px-2 py-1 rounded border border-green-700">
-                              {msg.parsed.positioning.lower?.timeframe} {msg.parsed.positioning.lower?.indicator.toUpperCase()}{msg.parsed.positioning.lower?.period}
-                            </span>
-                            <span className="bg-gray-700 text-gray-300 px-2 py-1 rounded">AND</span>
-                            <span className="bg-green-900/50 text-green-300 px-2 py-1 rounded border border-green-700">
-                              {msg.parsed.positioning.upper?.timeframe} {msg.parsed.positioning.upper?.indicator.toUpperCase()}{msg.parsed.positioning.upper?.period}
-                            </span>
-                          </>
-                        )}
-
-                        {msg.parsed.positioning.type === 'order' && msg.parsed.positioning.indicators && (
-                          <>
-                            {msg.parsed.positioning.indicators.map((ind, i) => (
-                              <React.Fragment key={i}>
-                                <span className="bg-indigo-900/50 text-indigo-300 px-2 py-1 rounded border border-indigo-700">
-                                  {ind.timeframe} {ind.indicator.toUpperCase()}{ind.period}
-                                </span>
-                                {i < msg.parsed!.positioning!.indicators!.length - 1 && (
-                                  <span className="bg-yellow-900/50 text-yellow-300 px-1 py-1 rounded font-bold">
-                                    {msg.parsed!.positioning!.orderType === 'ascending' ? '<' : '>'}
-                                  </span>
-                                )}
-                              </React.Fragment>
-                            ))}
-                            {msg.parsed.positioning.includePrice && (
-                              <span className="bg-blue-900/50 text-blue-300 px-2 py-1 rounded border border-blue-700">
-                                + PRICE
-                              </span>
-                            )}
-                          </>
-                        )}
-
-                        {msg.parsed.positioning.type === 'comparison' && (
-                          <>
-                            <span className="bg-purple-900/50 text-purple-300 px-2 py-1 rounded border border-purple-700">
-                              {msg.parsed.positioning.target?.timeframe} {msg.parsed.positioning.target?.indicator.toUpperCase()}{msg.parsed.positioning.target?.period}
-                            </span>
-                            <span className="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded border border-yellow-700 font-bold">
-                              {msg.parsed.positioning.comparison?.toUpperCase()}
-                            </span>
-                            <span className="bg-green-900/50 text-green-300 px-2 py-1 rounded border border-green-700">
-                              {msg.parsed.positioning.reference?.timeframe} {msg.parsed.positioning.reference?.indicator.toUpperCase()}{msg.parsed.positioning.reference?.period}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      {msg.count !== undefined && msg.total !== undefined && (
-                        <p className="text-gray-500">
-                          {msg.count}/{msg.total} coins from top 100 by 24h volume
-                          {msg.processingTime && ` • ${msg.processingTime}`}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Query Details - Regular Scan */}
-                  {msg.parsed && msg.parsed.intent !== 'indicator_positioning' && msg.parsed.indicators && msg.parsed.indicators.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-700 text-xs">
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {msg.parsed.indicators.map((ind, i) => (
-                          <span
-                            key={i}
-                            className={`px-2 py-1 rounded border ${
-                              ind.comparison === 'at'
-                                ? 'bg-amber-900/50 text-amber-300 border-amber-700'
-                                : 'bg-indigo-900/50 text-indigo-300 border-indigo-700'
-                            }`}
-                          >
-                            {ind.comparison} {ind.timeframe} {ind.indicator.toUpperCase()}{ind.period}
-                            {ind.supportResistanceFilter && (
-                              <span className={`ml-1 px-1 rounded text-xs font-bold ${
-                                ind.supportResistanceFilter === 'support'
-                                  ? 'bg-green-600 text-white'
-                                  : 'bg-red-600 text-white'
-                              }`}>
-                                {ind.supportResistanceFilter.toUpperCase()}
-                              </span>
-                            )}
-                          </span>
-                        ))}
-                        {msg.parsed.logic && msg.parsed.indicators.length > 1 && (
-                          <span className="bg-yellow-900/50 text-yellow-300 px-2 py-1 rounded border border-yellow-700 font-bold">
-                            {msg.parsed.logic}
-                          </span>
-                        )}
-                        {msg.parsed.coin && (
-                          <span className="bg-blue-900/50 text-blue-300 px-2 py-1 rounded border border-blue-700">
-                            Coin: {msg.parsed.coin}
-                          </span>
-                        )}
-                      </div>
-                      {msg.count !== undefined && msg.total !== undefined && (
-                        <p className="text-gray-500">
-                          {msg.count}/{msg.total} coins from top 100 by 24h volume
-                          {msg.processingTime && ` • ${msg.processingTime}`}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Tickers */}
-                  {msg.tickers && msg.tickers.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-700">
-                      <p className="font-semibold mb-2 text-sm text-gray-300">
-                        📊 Matching Tickers ({msg.tickers.length}):
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.details && msg.details.length > 0 ? (
-                          msg.details.map((coin: CoinDetail) => {
-                            // Find first indicator result with support/resistance info
-                            const firstResult = Object.values(coin.results)[0];
-                            const srLabel = firstResult?.supportResistance;
-
-                            return (
-                              <span
-                                key={coin.symbol}
-                                className="relative bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md hover:shadow-lg transition-shadow"
-                              >
-                                {coin.symbol.replace('USDT', '')}
-                                {srLabel && (
-                                  <span className={`absolute -top-2 -right-2 text-xs px-1 py-0.5 rounded font-bold ${
-                                    srLabel === 'support'
-                                      ? 'bg-green-400 text-green-900'
-                                      : 'bg-red-400 text-red-900'
-                                  }`}>
-                                    {srLabel === 'support' ? 'S' : 'R'}
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })
-                        ) : (
-                          msg.tickers.map((ticker) => (
-                            <span
-                              key={ticker}
-                              className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-md hover:shadow-lg transition-shadow"
-                            >
-                              {ticker.replace('USDT', '')}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {msg.tickers && msg.tickers.length === 0 && msg.count === 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-700">
-                      <p className="text-yellow-400 text-sm">⚠️ No coins matched your criteria</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {loading && (
-                <div className="bg-gray-900/60 p-4 rounded-lg mr-auto max-w-[85%] border border-gray-700">
-                  <p className="text-xs font-semibold mb-2 text-gray-400">🤖 Assistant</p>
-                  {!showColdStartMessage ? (
-                    <p className="text-gray-300 flex items-center gap-2">
-                      <span className="animate-pulse">⏳</span>
-                      Analyzing top 100 coins...
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-gray-300 flex items-center gap-2">
-                        <span className="animate-spin">🔄</span>
-                        Waking up backend...
-                      </p>
-                      <p className="text-yellow-400 text-xs">
-                        ⚡ First request may take up to 50 seconds (free tier limitation)
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-neutral-800">
+              <div>
+                <p className="text-neutral-500 text-xs uppercase tracking-wide mb-1">Trend</p>
+                <p className="text-neutral-400 text-xs">&ldquo;daily trend&rdquo; = EMA 13, 25, 32 cluster</p>
+              </div>
+              <div>
+                <p className="text-neutral-500 text-xs uppercase tracking-wide mb-1">Support / Resistance</p>
+                <p className="text-neutral-400 text-xs">S = testing from above, R = testing from below</p>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="mt-4 pt-4 border-t border-neutral-800">
+              <p className="text-neutral-500 text-xs uppercase tracking-wide mb-2">Example Queries</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <code className="text-neutral-400 bg-neutral-800/50 px-2 py-1 rounded">coins above daily MA100 and EMA200</code>
+                <code className="text-neutral-400 bg-neutral-800/50 px-2 py-1 rounded">4h MA100 between 1d EMA13 and EMA25</code>
+                <code className="text-neutral-400 bg-neutral-800/50 px-2 py-1 rounded">show me coins at 4h EMA200 as support</code>
+                <code className="text-neutral-400 bg-neutral-800/50 px-2 py-1 rounded">1d MA100 &lt; EMA200 &lt; MA300</code>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g., coins above 4h EMA200, or 1d MA100 as support"
-            className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 text-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-            disabled={loading}
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed font-medium shadow-lg hover:shadow-xl transition-all"
-          >
-            {loading ? '⏳' : '🚀'} Send
-          </button>
-        </form>
-      </div>
+        {/* Chat Container */}
+        <div className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <p className="text-neutral-400 mb-1">Scan top 100 futures by volume</p>
+                <p className="text-neutral-600 text-sm mb-6">Query MA/EMA levels across timeframes</p>
+                <div className="flex flex-wrap gap-2 justify-center max-w-md">
+                  {exampleQueries.map((query, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleExampleClick(query)}
+                      className="px-3 py-1.5 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-neutral-200 rounded-full transition-colors border border-neutral-700"
+                    >
+                      {query}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-4 rounded-lg ${
+                      msg.role === 'user'
+                        ? 'bg-neutral-800 ml-auto max-w-[85%]'
+                        : 'bg-neutral-800/50 mr-auto max-w-[85%] border border-neutral-700/50'
+                    }`}
+                  >
+                    <p className="text-xs text-neutral-500 mb-2">
+                      {msg.role === 'user' ? 'You' : 'Scanner'}
+                    </p>
+                    <p className="text-neutral-200 text-sm">{msg.content}</p>
+
+                    {/* Query Details - Indicator Positioning */}
+                    {msg.parsed && msg.parsed.intent === 'indicator_positioning' && msg.parsed.positioning && (
+                      <div className="mt-3 pt-3 border-t border-neutral-700 text-xs">
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {msg.parsed.positioning.type === 'between' && (
+                            <>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.target?.timeframe} {msg.parsed.positioning.target?.indicator.toUpperCase()}{msg.parsed.positioning.target?.period}
+                              </span>
+                              <span className="text-neutral-500">between</span>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.lower?.timeframe} {msg.parsed.positioning.lower?.indicator.toUpperCase()}{msg.parsed.positioning.lower?.period}
+                              </span>
+                              <span className="text-neutral-500">&</span>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.upper?.timeframe} {msg.parsed.positioning.upper?.indicator.toUpperCase()}{msg.parsed.positioning.upper?.period}
+                              </span>
+                            </>
+                          )}
+                          {msg.parsed.positioning.type === 'price_between' && (
+                            <>
+                              <span className="bg-emerald-900/50 text-emerald-400 px-2 py-0.5 rounded">PRICE</span>
+                              <span className="text-neutral-500">between</span>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.lower?.timeframe} {msg.parsed.positioning.lower?.indicator.toUpperCase()}{msg.parsed.positioning.lower?.period}
+                              </span>
+                              <span className="text-neutral-500">&</span>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.upper?.timeframe} {msg.parsed.positioning.upper?.indicator.toUpperCase()}{msg.parsed.positioning.upper?.period}
+                              </span>
+                            </>
+                          )}
+                          {msg.parsed.positioning.type === 'order' && msg.parsed.positioning.indicators && (
+                            <>
+                              {msg.parsed.positioning.indicators.map((ind, i) => (
+                                <React.Fragment key={i}>
+                                  <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                    {ind.timeframe} {ind.indicator.toUpperCase()}{ind.period}
+                                  </span>
+                                  {i < msg.parsed!.positioning!.indicators!.length - 1 && (
+                                    <span className="text-neutral-500">
+                                      {msg.parsed!.positioning!.orderType === 'ascending' ? '<' : '>'}
+                                    </span>
+                                  )}
+                                </React.Fragment>
+                              ))}
+                            </>
+                          )}
+                          {msg.parsed.positioning.type === 'comparison' && (
+                            <>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.target?.timeframe} {msg.parsed.positioning.target?.indicator.toUpperCase()}{msg.parsed.positioning.target?.period}
+                              </span>
+                              <span className="text-neutral-500">{msg.parsed.positioning.comparison}</span>
+                              <span className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded">
+                                {msg.parsed.positioning.reference?.timeframe} {msg.parsed.positioning.reference?.indicator.toUpperCase()}{msg.parsed.positioning.reference?.period}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        {msg.count !== undefined && msg.total !== undefined && (
+                          <p className="text-neutral-500 text-xs">
+                            {msg.count}/{msg.total} coins matched {msg.processingTime && `· ${msg.processingTime}`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Query Details - Regular Scan */}
+                    {msg.parsed && msg.parsed.intent !== 'indicator_positioning' && msg.parsed.indicators && msg.parsed.indicators.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-neutral-700 text-xs">
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {msg.parsed.indicators.map((ind, i) => (
+                            <span
+                              key={i}
+                              className="bg-neutral-700 text-neutral-300 px-2 py-0.5 rounded"
+                            >
+                              {ind.comparison} {ind.timeframe} {ind.indicator.toUpperCase()}{ind.period}
+                              {ind.supportResistanceFilter && (
+                                <span className={`ml-1 px-1 rounded text-xs font-medium ${
+                                  ind.supportResistanceFilter === 'support'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {ind.supportResistanceFilter === 'support' ? 'S' : 'R'}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                          {msg.parsed.logic && msg.parsed.indicators.length > 1 && (
+                            <span className="text-neutral-500 px-1">{msg.parsed.logic}</span>
+                          )}
+                        </div>
+                        {msg.count !== undefined && msg.total !== undefined && (
+                          <p className="text-neutral-500 text-xs">
+                            {msg.count}/{msg.total} coins matched {msg.processingTime && `· ${msg.processingTime}`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Tickers */}
+                    {msg.tickers && msg.tickers.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-neutral-700">
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.details && msg.details.length > 0 ? (
+                            msg.details.map((coin: CoinDetail) => {
+                              const firstResult = Object.values(coin.results)[0];
+                              const srLabel = firstResult?.supportResistance;
+                              return (
+                                <span
+                                  key={coin.symbol}
+                                  className="relative bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded text-xs font-medium border border-emerald-500/20"
+                                >
+                                  {coin.symbol.replace('USDT', '')}
+                                  {srLabel && (
+                                    <span className={`ml-1 text-xs ${
+                                      srLabel === 'support' ? 'text-emerald-300' : 'text-red-400'
+                                    }`}>
+                                      {srLabel === 'support' ? 'S' : 'R'}
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })
+                          ) : (
+                            msg.tickers.map((ticker) => (
+                              <span
+                                key={ticker}
+                                className="bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded text-xs font-medium border border-emerald-500/20"
+                              >
+                                {ticker.replace('USDT', '')}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {msg.tickers && msg.tickers.length === 0 && msg.count === 0 && (
+                      <div className="mt-3 pt-3 border-t border-neutral-700">
+                        <p className="text-amber-500/80 text-xs">No coins matched your criteria</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {loading && (
+                  <div className="bg-neutral-800/50 p-4 rounded-lg mr-auto max-w-[85%] border border-neutral-700/50">
+                    <p className="text-xs text-neutral-500 mb-2">Scanner</p>
+                    {!showColdStartMessage ? (
+                      <div className="flex items-center gap-2 text-neutral-400 text-sm">
+                        <div className="w-4 h-4 border-2 border-neutral-600 border-t-emerald-500 rounded-full animate-spin"></div>
+                        Analyzing top 100 coins...
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-neutral-400 text-sm">
+                          <div className="w-4 h-4 border-2 border-neutral-600 border-t-emerald-500 rounded-full animate-spin"></div>
+                          Waking up backend...
+                        </div>
+                        <p className="text-neutral-500 text-xs">
+                          First request may take up to 50s (free tier)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Input Form */}
+          <div className="p-4 border-t border-neutral-800">
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="e.g., coins above 4h EMA200"
+                className="flex-1 px-4 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 placeholder-neutral-500 text-sm"
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white rounded-lg font-medium text-sm transition-colors"
+              >
+                {loading ? 'Scanning...' : 'Scan'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

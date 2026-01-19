@@ -111,7 +111,7 @@ function detectIndicatorPositioning(query) {
   // Check for ordering keywords or symbols
   const hasOrderKeywords = /\b(ascending|descending|order)\b/i.test(normalized);
   const hasOrderSymbols = /<|>/g.test(normalized);
-  const hasMultipleIndicators = (normalized.match(/(ema|ma)\s*\d+/gi) || []).length >= 2;
+  const hasMultipleIndicators = (normalized.match(/(ema|s?ma)\s*\d+/gi) || []).length >= 2;
 
   if ((hasOrderKeywords || hasOrderSymbols) && hasMultipleIndicators) {
     return 'order';
@@ -149,13 +149,14 @@ function parseIndicatorPositioning(query) {
   const includesPrice = /\bprice\b/i.test(normalized);
 
   // Extract all indicators from the query
-  const pattern = /(?:(\d+[mhdw]|daily|hourly|weekly)\s*)?(ema|ma)\s*(\d+)/gi;
+  const pattern = /(?:(\d+[mhdw]|daily|hourly|weekly)\s*)?(ema|s?ma)\s*(\d+)/gi;
   const matches = [];
   let match;
 
   while ((match = pattern.exec(normalized)) !== null) {
     let timeframe = match[1] || null;
-    const indicator = match[2];
+    // Normalize 'sma' to 'ma'
+    const indicator = match[2].replace('sma', 'ma');
     const period = parseInt(match[3]);
 
     // Convert timeframe aliases
@@ -285,13 +286,24 @@ function extractAllIndicators(query) {
   // Pattern to match: [timeframe] [indicator][period] with optional "above/below"
   // Examples: "1d MA100", "above 4h EMA200", "below daily ma100"
 
-  // First, split by AND/OR to handle each condition separately
+  // First, split by AND/OR/comma to handle each condition separately
   const logic = detectLogic(query);
-  const separator = logic === 'OR' ? /\s+or\s+/i : /\s+and\s+/i;
-  const parts = query.split(separator);
+  // Split by "and", "or", or comma (but not comma within parentheses)
+  const separator = logic === 'OR' ? /\s+or\s+|,\s*/i : /\s+and\s+|,\s*/i;
+  const parts = query.split(separator).filter(p => p.trim());
 
   // Get global support/resistance filter
   const globalSRFilter = extractSupportResistanceFilter(query);
+
+  // Get global comparison from the query (for comma-separated lists)
+  let globalComparison = null;
+  if (/\b(?:below|under)\b/i.test(normalized)) {
+    globalComparison = 'below';
+  } else if (/\b(?:at|touching|testing|near|around)\b/i.test(normalized)) {
+    globalComparison = 'at';
+  } else if (/\b(?:above|over)\b/i.test(normalized)) {
+    globalComparison = 'above';
+  }
 
   parts.forEach(part => {
     const partNorm = part.toLowerCase();
@@ -301,12 +313,13 @@ function extractAllIndicators(query) {
 
     if (hasTrend && trendQuery) {
       // Extract comparison for trend
+      // "touching", "testing", "near", "around" are treated as "at"
       let comparison = 'above'; // default
-      if (/\bbelow\b/i.test(partNorm)) {
+      if (/\b(?:below|under)\b/i.test(partNorm)) {
         comparison = 'below';
-      } else if (/\bat\b/i.test(partNorm)) {
+      } else if (/\b(?:at|touching|testing|near|around)\b/i.test(partNorm)) {
         comparison = 'at';
-      } else if (/\babove\b/i.test(partNorm)) {
+      } else if (/\b(?:above|over)\b/i.test(partNorm)) {
         comparison = 'above';
       }
 
@@ -332,12 +345,14 @@ function extractAllIndicators(query) {
     }
 
     // Extract comparison for this part (above/below/at)
-    let comparison = 'above'; // default
-    if (/\bbelow\b/i.test(partNorm) && !/</i.test(partNorm)) {
+    // "touching", "testing", "near", "around" are treated as "at"
+    // Fall back to globalComparison if no comparison found in this part
+    let comparison = globalComparison || 'above'; // default
+    if (/\b(?:below|under)\b/i.test(partNorm) && !/</i.test(partNorm)) {
       comparison = 'below';
-    } else if (/\bat\b/i.test(partNorm)) {
+    } else if (/\b(?:at|touching|testing|near|around)\b/i.test(partNorm)) {
       comparison = 'at';
-    } else if (/\babove\b/i.test(partNorm) && !/>/i.test(partNorm)) {
+    } else if (/\b(?:above|over)\b/i.test(partNorm) && !/>/i.test(partNorm)) {
       comparison = 'above';
     } else if (/</.test(partNorm)) {
       comparison = 'below';
@@ -350,14 +365,15 @@ function extractAllIndicators(query) {
       comparison = 'at';
     }
 
-    // Pattern: optional timeframe + (ma|ema) + number
-    // Updated to match both "ma" and "ema" separately
-    const pattern = /(?:(\d+[mhdw]|daily|hourly|weekly)\s*)?(ema|ma)\s*(\d+)/gi;
+    // Pattern: optional timeframe + (ma|sma|ema) + number
+    // Updated to match "ma", "sma", and "ema" separately
+    const pattern = /(?:(\d+[mhdw]|daily|hourly|weekly)\s*)?(ema|s?ma)\s*(\d+)/gi;
 
     let match;
     while ((match = pattern.exec(partNorm)) !== null) {
       let timeframe = match[1] || null;
-      const indicator = match[2]; // 'ema' or 'ma'
+      // Normalize 'sma' to 'ma'
+      const indicator = match[2].replace('sma', 'ma'); // 'ema' or 'ma'
       const period = parseInt(match[3]);
 
       // Convert timeframe aliases

@@ -10,7 +10,7 @@ async function debugBTC() {
 
   try {
     // Fetch 4h klines for BTC
-    const url = 'https://api.binance.com/api/v3/klines';
+    const url = 'https://fapi.binance.com/fapi/v1/klines';
     const response = await axios.get(url, {
       params: {
         symbol: 'BTCUSDT',
