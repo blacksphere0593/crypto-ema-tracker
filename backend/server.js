@@ -530,11 +530,12 @@ async function handleIndicatorValueQuery(parsed, res) {
     }
 
     const closePrices = klines.map(k => parseFloat(k[4]));
-    const currentPrice = closePrices[closePrices.length - 1];
+    // Use last CLOSED candle (second to last) for consistency with scan queries
+    const currentPrice = closePrices[closePrices.length - 2];
 
     // Calculate indicator
     const indicatorValues = await calculateIndicator(closePrices, indicator, period);
-    const indicatorValue = indicatorValues[indicatorValues.length - 1];
+    const indicatorValue = indicatorValues[indicatorValues.length - 2];
 
     const key = `${timeframe}_${indicator.toUpperCase()}${period}`;
     const results = {
