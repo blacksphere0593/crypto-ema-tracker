@@ -577,10 +577,21 @@ async function handleIndicatorPositioning(parsed, res) {
   // Get top 100 coins
   const coins = await getCoins(100);
 
-  // Fetch data for all coins with required indicators
+  // Fetch data for all coins in batches to avoid rate limiting
   const startTime = Date.now();
-  const promises = coins.map(symbol => getCoinData(symbol, parsed.indicators));
-  const results = await Promise.all(promises);
+  const BATCH_SIZE = 10;
+  const results = [];
+
+  for (let i = 0; i < coins.length; i += BATCH_SIZE) {
+    const batch = coins.slice(i, i + BATCH_SIZE);
+    const batchPromises = batch.map(symbol => getCoinData(symbol, parsed.indicators));
+    const batchResults = await Promise.all(batchPromises);
+    results.push(...batchResults);
+
+    if (i + BATCH_SIZE < coins.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
   const fetchTime = Date.now() - startTime;
 
   // Filter out null results
@@ -817,10 +828,22 @@ app.post('/api/query', async (req, res) => {
       ind => ind.comparison === 'at' || ind.supportResistanceFilter
     );
 
-    // Fetch data for all coins
+    // Fetch data for all coins in batches to avoid rate limiting
     const startTime = Date.now();
-    const promises = coins.map(symbol => getCoinData(symbol, indicators, needsSupportResistance));
-    const results = await Promise.all(promises);
+    const BATCH_SIZE = 10; // Process 10 coins at a time
+    const results = [];
+
+    for (let i = 0; i < coins.length; i += BATCH_SIZE) {
+      const batch = coins.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(symbol => getCoinData(symbol, indicators, needsSupportResistance));
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+
+      // Small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < coins.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
     const fetchTime = Date.now() - startTime;
 
     // Filter out null results
