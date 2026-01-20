@@ -164,6 +164,15 @@ function detectClusterSupportResistance(closePrices, emaValues13, emaValues25, e
 const klinesCache = new Map();
 const CACHE_TTL = 60000; // 60 seconds
 
+// Track API failures for diagnostics
+const apiFailures = {
+  rateLimits: 0,
+  timeouts: 0,
+  notFound: 0,
+  other: 0,
+  lastReset: Date.now()
+};
+
 async function getKlines(symbol, interval = '1d', limit = 500) {
   const cacheKey = `${symbol}_${interval}_${limit}`;
   const cached = klinesCache.get(cacheKey);
@@ -193,7 +202,26 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
 
     return response.data;
   } catch (error) {
-    console.error(`Error fetching ${symbol} ${interval}:`, error.message);
+    // Detailed error tracking
+    if (error.response) {
+      const status = error.response.status;
+      if (status === 429 || status === 418) {
+        apiFailures.rateLimits++;
+        console.error(`[RATE LIMIT] ${symbol} ${interval}: ${status} - ${error.response.data?.msg || error.message}`);
+      } else if (status === 400) {
+        apiFailures.notFound++;
+        // Don't log 400s (usually just invalid symbol) to reduce noise
+      } else {
+        apiFailures.other++;
+        console.error(`[API ERROR] ${symbol} ${interval}: ${status} - ${error.message}`);
+      }
+    } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      apiFailures.timeouts++;
+      console.error(`[TIMEOUT] ${symbol} ${interval}: ${error.message}`);
+    } else {
+      apiFailures.other++;
+      console.error(`[ERROR] ${symbol} ${interval}: ${error.message}`);
+    }
     return null;
   }
 }
@@ -856,15 +884,107 @@ app.post('/api/query', async (req, res) => {
     }
     const fetchTime = Date.now() - startTime;
 
-    // Filter out null results
+    // Filter out null results and track failures
     const validResults = results.filter(r => r !== null);
+    const failedCoins = coins.filter((coin, i) => results[i] === null);
 
+    // Capture and reset API failure stats for this query
+    const queryApiStats = { ...apiFailures };
+    // Reset for next query
+    apiFailures.rateLimits = 0;
+    apiFailures.timeouts = 0;
+    apiFailures.notFound = 0;
+    apiFailures.other = 0;
+
+    console.log(`\n========== QUERY DIAGNOSTICS ==========`);
+    console.log(`Query: "${query}"`);
     console.log(`Valid results: ${validResults.length}/${coins.length}`);
-    console.log(`Indicators to check:`, parsed.indicators.length);
-    console.log(`Logic:`, parsed.logic);
+    console.log(`API Stats - Rate limits: ${queryApiStats.rateLimits}, Timeouts: ${queryApiStats.timeouts}, Not found: ${queryApiStats.notFound}, Other: ${queryApiStats.other}`);
+    if (failedCoins.length > 0) {
+      console.log(`Failed coins (${failedCoins.length}): ${failedCoins.join(', ')}`);
+    }
+    console.log(`Indicators to check: ${parsed.indicators.length}`);
+    console.log(`Logic: ${parsed.logic}`);
 
-    // Apply filters with AND/OR logic
-    const filteredCoins = filterCoins(validResults, parsed);
+    // Apply filters with AND/OR logic and track why coins fail
+    const filterResults = [];
+    const filteredCoins = validResults.filter(coinData => {
+      if (!coinData || !coinData.results) {
+        filterResults.push({ symbol: coinData?.symbol || 'unknown', passed: false, reason: 'no results' });
+        return false;
+      }
+
+      const indicatorChecks = parsed.indicators.map(ind => {
+        const key = `${ind.timeframe}_${ind.indicator}${ind.period}`;
+        const result = coinData.results[key];
+
+        if (!result) {
+          return { indicator: key, passed: false, reason: 'no data' };
+        }
+
+        const match = checkIndicatorMatch(result, ind);
+        return {
+          indicator: key,
+          passed: match,
+          comparison: ind.comparison,
+          price: result.price,
+          indicatorValue: result.indicatorValue,
+          aboveIndicator: result.aboveIndicator,
+          belowIndicator: result.belowIndicator,
+          atIndicator: result.atIndicator
+        };
+      });
+
+      let passed;
+      if (parsed.logic === 'OR') {
+        passed = indicatorChecks.some(c => c.passed);
+      } else {
+        passed = indicatorChecks.every(c => c.passed);
+      }
+
+      filterResults.push({
+        symbol: coinData.symbol,
+        passed,
+        checks: indicatorChecks
+      });
+
+      return passed;
+    });
+
+    // Log detailed filter results for debugging
+    const passedCoins = filterResults.filter(r => r.passed);
+    const rejectedCoins = filterResults.filter(r => !r.passed);
+
+    console.log(`\nFilter Results: ${passedCoins.length} passed, ${rejectedCoins.length} rejected`);
+
+    // Log a sample of rejected coins with their actual values (useful for debugging)
+    const sampleRejected = rejectedCoins.slice(0, 5);
+    if (sampleRejected.length > 0) {
+      console.log(`\nSample rejected coins:`);
+      sampleRejected.forEach(r => {
+        const checksStr = r.checks?.map(c =>
+          `${c.indicator}: ${c.comparison} check=${c.passed} (price=${c.price?.toFixed(4)}, ind=${c.indicatorValue?.toFixed(4)}, above=${c.aboveIndicator})`
+        ).join(', ');
+        console.log(`  ${r.symbol}: ${checksStr || r.reason}`);
+      });
+    }
+
+    // Specifically log XMR status if present (for debugging)
+    const xmrResult = filterResults.find(r => r.symbol === 'XMRUSDT');
+    if (xmrResult) {
+      console.log(`\n[XMR STATUS] Passed: ${xmrResult.passed}`);
+      xmrResult.checks?.forEach(c => {
+        console.log(`  ${c.indicator}: ${c.comparison} check=${c.passed} (price=${c.price?.toFixed(4)}, ind=${c.indicatorValue?.toFixed(4)}, above=${c.aboveIndicator})`);
+      });
+    } else {
+      // Check if XMR is in failed coins
+      if (failedCoins.includes('XMRUSDT')) {
+        console.log(`\n[XMR STATUS] FAILED to fetch data - check API errors above`);
+      } else if (!coins.includes('XMRUSDT')) {
+        console.log(`\n[XMR STATUS] Not in top 100 coins list`);
+      }
+    }
+    console.log(`========================================\n`);
 
     // Extract tickers
     const tickers = filteredCoins.map(coin => coin.symbol);
@@ -881,6 +1001,32 @@ app.post('/api/query', async (req, res) => {
 
     const message = `Found ${tickers.length} coin(s) matching: ${conditionsStr} (from top 100 by 24h volume)`;
 
+    // Build diagnostic object
+    const diagnostics = {
+      apiStats: {
+        rateLimits: queryApiStats.rateLimits,
+        timeouts: queryApiStats.timeouts,
+        notFound: queryApiStats.notFound,
+        other: queryApiStats.other
+      },
+      processed: validResults.length,
+      failed: failedCoins.length,
+      failedCoins: failedCoins.length > 0 ? failedCoins : undefined,
+      filterStats: {
+        passed: passedCoins.length,
+        rejected: rejectedCoins.length
+      },
+      xmrStatus: xmrResult ? {
+        inResults: true,
+        passed: xmrResult.passed,
+        checks: xmrResult.checks
+      } : {
+        inResults: false,
+        reason: failedCoins.includes('XMRUSDT') ? 'API fetch failed' :
+                !coins.includes('XMRUSDT') ? 'Not in top 100' : 'Unknown'
+      }
+    };
+
     res.json({
       message: message,
       tickers: tickers,
@@ -888,7 +1034,8 @@ app.post('/api/query', async (req, res) => {
       total: coins.length,
       parsed: parsed,
       details: filteredCoins,
-      processingTime: `${fetchTime}ms`
+      processingTime: `${fetchTime}ms`,
+      diagnostics: diagnostics
     });
 
   } catch (error) {
