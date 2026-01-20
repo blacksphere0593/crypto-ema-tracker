@@ -9,8 +9,8 @@ async function debugBTC() {
   console.log('=== Debugging BTC 4h EMA200 ===\n');
 
   try {
-    // Fetch 4h klines for BTC
-    const url = 'https://fapi.binance.com/fapi/v1/klines';
+    // Fetch 4h klines for BTC (using Spot API for higher rate limits)
+    const url = 'https://api.binance.com/api/v3/klines';
     const response = await axios.get(url, {
       params: {
         symbol: 'BTCUSDT',

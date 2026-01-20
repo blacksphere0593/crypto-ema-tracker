@@ -160,9 +160,9 @@ function detectClusterSupportResistance(closePrices, emaValues13, emaValues25, e
  * @param {number} limit - Number of candles to fetch (max 1000)
  * @returns {Promise<Array|null>} - Klines data or null on error
  */
-// Simple in-memory cache for klines data (5 minute TTL to reduce API calls)
+// Simple in-memory cache for klines data
 const klinesCache = new Map();
-const CACHE_TTL = 300000; // 5 minutes - aggressive caching to avoid rate limits
+const CACHE_TTL = 60000; // 60 seconds - Spot API has higher rate limits
 
 // Track API failures for diagnostics
 const apiFailures = {
@@ -187,7 +187,8 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
 
   try {
     const binanceInterval = BINANCE_INTERVALS[interval] || interval;
-    const url = `https://fapi.binance.com/fapi/v1/klines`;
+    // Use SPOT API for klines (6000 weight/min vs Futures 2400 weight/min)
+    const url = `https://api.binance.com/api/v3/klines`;
     const response = await axios.get(url, {
       params: {
         symbol: symbol,
@@ -232,6 +233,7 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
 /**
  * Get coin data with indicators calculated
  * Phase 3: Uses last CLOSED candle to avoid false positives from incomplete candles
+ * Optimized: Groups indicators by timeframe and fetches klines ONCE per timeframe
  * @param {string} symbol - Trading pair
  * @param {Array} indicators - Array of {timeframe, indicator, period}
  * @param {boolean} detectSupportResistance - Whether to detect support/resistance
@@ -240,63 +242,73 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
 async function getCoinData(symbol, indicators, detectSupportResistance = false) {
   const results = {};
 
+  // Group indicators by timeframe to minimize API calls
+  const indicatorsByTimeframe = {};
   for (const ind of indicators) {
-    const { timeframe, indicator, period } = ind;
-    const key = `${timeframe}_${indicator}${period}`;
+    if (!indicatorsByTimeframe[ind.timeframe]) {
+      indicatorsByTimeframe[ind.timeframe] = [];
+    }
+    indicatorsByTimeframe[ind.timeframe].push(ind);
+  }
 
-    // Calculate required candles - add extra for support/resistance detection
-    // Phase 3: Add 1 extra candle so we can use the CLOSED candle (second-to-last)
-    const baseCandles = getRequiredCandles(period);
-    const requiredCandles = detectSupportResistance ? baseCandles + 6 : baseCandles + 1;
+  // Process each timeframe ONCE
+  for (const [timeframe, tfIndicators] of Object.entries(indicatorsByTimeframe)) {
+    // Find maximum candles needed for this timeframe
+    let maxCandles = 0;
+    for (const ind of tfIndicators) {
+      const baseCandles = getRequiredCandles(ind.period);
+      const required = detectSupportResistance ? baseCandles + 6 : baseCandles + 1;
+      maxCandles = Math.max(maxCandles, required);
+    }
 
-    // Fetch klines
-    const klines = await getKlines(symbol, timeframe, requiredCandles);
+    // Fetch klines ONCE for this timeframe with max candles needed
+    const klines = await getKlines(symbol, timeframe, maxCandles);
 
     if (!klines || klines.length < 2) {
-      console.error(`Insufficient data for ${symbol} ${timeframe}`);
+      // Don't log every failure - too noisy when rate limited
       continue;
     }
 
-    // Extract close prices
+    // Extract close prices once
     const closePrices = klines.map(k => parseFloat(k[4]));
-
-    // Phase 3: Use second-to-last candle (last CLOSED candle) to avoid false positives
-    // The last candle (index -1) is incomplete and still in progress
-    // Using closed candles ensures we only trigger on confirmed price action
     const currentPrice = closePrices[closePrices.length - 2];
-    const currentVolume = parseFloat(klines[klines.length - 2][7]); // Index 7 = Quote asset volume (USDT)
+    const currentVolume = parseFloat(klines[klines.length - 2][7]);
 
-    // Calculate indicator
-    try {
-      const indicatorValues = await calculateIndicator(closePrices, indicator, period);
-      // Phase 3: Use second-to-last indicator value (corresponding to closed candle)
-      const currentIndicatorValue = indicatorValues[indicatorValues.length - 2];
+    // Calculate ALL indicators for this timeframe using the same klines data
+    for (const ind of tfIndicators) {
+      const { indicator, period } = ind;
+      const key = `${timeframe}_${indicator}${period}`;
 
-      // Calculate "at" threshold check
-      const atThreshold = AT_THRESHOLDS[timeframe] || 0.002; // Default 0.2%
-      const diffPercent = Math.abs(currentPrice - currentIndicatorValue) / currentIndicatorValue;
-      const isAtIndicator = diffPercent <= atThreshold;
+      try {
+        const indicatorValues = await calculateIndicator(closePrices, indicator, period);
+        const currentIndicatorValue = indicatorValues[indicatorValues.length - 2];
 
-      // Detect support/resistance if requested and price is at indicator
-      let supportResistance = null;
-      if (detectSupportResistance && isAtIndicator && indicatorValues.length >= 4) {
-        supportResistance = detectSupportResistanceLevel(closePrices, indicatorValues, atThreshold);
+        // Calculate "at" threshold check
+        const atThreshold = AT_THRESHOLDS[timeframe] || 0.002;
+        const diffPercent = Math.abs(currentPrice - currentIndicatorValue) / currentIndicatorValue;
+        const isAtIndicator = diffPercent <= atThreshold;
+
+        // Detect support/resistance if requested and price is at indicator
+        let supportResistance = null;
+        if (detectSupportResistance && isAtIndicator && indicatorValues.length >= 4) {
+          supportResistance = detectSupportResistanceLevel(closePrices, indicatorValues, atThreshold);
+        }
+
+        results[key] = {
+          price: currentPrice,
+          volume: currentVolume,
+          indicatorValue: currentIndicatorValue,
+          aboveIndicator: currentPrice > currentIndicatorValue,
+          belowIndicator: currentPrice < currentIndicatorValue,
+          atIndicator: isAtIndicator,
+          diffPercent: diffPercent,
+          supportResistance: supportResistance,
+          timeframe: timeframe
+        };
+      } catch (error) {
+        console.error(`Error calculating ${indicator}${period} for ${symbol}:`, error.message);
+        continue;
       }
-
-      results[key] = {
-        price: currentPrice,
-        volume: currentVolume,
-        indicatorValue: currentIndicatorValue,
-        aboveIndicator: currentPrice > currentIndicatorValue,
-        belowIndicator: currentPrice < currentIndicatorValue,
-        atIndicator: isAtIndicator,
-        diffPercent: diffPercent,
-        supportResistance: supportResistance,
-        timeframe: timeframe
-      };
-    } catch (error) {
-      console.error(`Error calculating ${indicator}${period} for ${symbol}:`, error.message);
-      continue;
     }
   }
 
@@ -624,24 +636,30 @@ async function handleIndicatorPositioning(parsed, res) {
     });
   }
 
-  // Get top 100 coins
+  // Get top 100 coins by FUTURES volume (returns {futures, spot} pairs)
   const coins = await getCoins(100);
 
-  // Fetch data for all coins in small batches with delays to avoid rate limits
+  if (coins.length === 0) {
+    return res.status(503).json({
+      message: 'Could not fetch coin list',
+      error: 'Binance API unavailable'
+    });
+  }
+
+  // Fetch data using SPOT API (higher rate limits)
   const startTime = Date.now();
-  const BATCH_SIZE = 5;
-  const BATCH_DELAY = 500;
+  const BATCH_SIZE = 10;
   const results = [];
 
   for (let i = 0; i < coins.length; i += BATCH_SIZE) {
     const batch = coins.slice(i, i + BATCH_SIZE);
-    const batchPromises = batch.map(symbol => getCoinData(symbol, parsed.indicators));
+    // Use SPOT symbol for API call, store FUTURES symbol for display
+    const batchPromises = batch.map(coin =>
+      getCoinData(coin.spot, parsed.indicators)
+        .then(result => result ? { ...result, symbol: coin.futures } : null)
+    );
     const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults);
-
-    if (i + BATCH_SIZE < coins.length) {
-      await delay(BATCH_DELAY);
-    }
   }
   const fetchTime = Date.now() - startTime;
 
@@ -868,8 +886,15 @@ app.post('/api/query', async (req, res) => {
       });
     }
 
-    // Get top 100 coins (now async - fetches dynamically by volume)
+    // Get top 100 coins by FUTURES volume (returns {futures, spot} pairs)
     const coins = await getCoins(100);
+
+    if (coins.length === 0) {
+      return res.status(503).json({
+        message: 'Could not fetch coin list',
+        error: 'Binance API unavailable'
+      });
+    }
 
     // Use indicators from parsed query (supports multiple indicators now)
     const indicators = parsed.indicators;
@@ -879,31 +904,28 @@ app.post('/api/query', async (req, res) => {
       ind => ind.comparison === 'at' || ind.supportResistanceFilter
     );
 
-    // Fetch data for all coins in small batches with delays to avoid rate limits
-    // Binance Futures has strict rate limits and Render's shared IPs get banned easily
+    // Fetch data using SPOT API (higher rate limits: 6000 vs 2400 weight/min)
     const startTime = Date.now();
-    const BATCH_SIZE = 5; // Very small batches to avoid rate limits
-    const BATCH_DELAY = 500; // 500ms delay between batches
+    const BATCH_SIZE = 10; // Can use larger batches with Spot API
     const results = [];
 
-    console.log(`Processing ${coins.length} coins in batches of ${BATCH_SIZE} with ${BATCH_DELAY}ms delays...`);
+    console.log(`Processing ${coins.length} coins using SPOT API...`);
 
     for (let i = 0; i < coins.length; i += BATCH_SIZE) {
       const batch = coins.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(symbol => getCoinData(symbol, indicators, needsSupportResistance));
+      // Use SPOT symbol for API call, but store FUTURES symbol for display
+      const batchPromises = batch.map(coin =>
+        getCoinData(coin.spot, indicators, needsSupportResistance)
+          .then(result => result ? { ...result, symbol: coin.futures, spotSymbol: coin.spot } : null)
+      );
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
-
-      // Add delay between batches (except for last batch)
-      if (i + BATCH_SIZE < coins.length) {
-        await delay(BATCH_DELAY);
-      }
     }
     const fetchTime = Date.now() - startTime;
 
     // Filter out null results and track failures
     const validResults = results.filter(r => r !== null);
-    const failedCoins = coins.filter((coin, i) => results[i] === null);
+    const failedCoins = coins.filter((coin, i) => results[i] === null).map(c => c.futures);
 
     // Capture and reset API failure stats for this query
     const queryApiStats = { ...apiFailures };
@@ -995,9 +1017,10 @@ app.post('/api/query', async (req, res) => {
       });
     } else {
       // Check if XMR is in failed coins
+      const xmrInList = coins.some(c => c.futures === 'XMRUSDT');
       if (failedCoins.includes('XMRUSDT')) {
         console.log(`\n[XMR STATUS] FAILED to fetch data - check API errors above`);
-      } else if (!coins.includes('XMRUSDT')) {
+      } else if (!xmrInList) {
         console.log(`\n[XMR STATUS] Not in top 100 coins list`);
       }
     }
@@ -1040,7 +1063,7 @@ app.post('/api/query', async (req, res) => {
       } : {
         inResults: false,
         reason: failedCoins.includes('XMRUSDT') ? 'API fetch failed' :
-                !coins.includes('XMRUSDT') ? 'Not in top 100' : 'Unknown'
+                !coins.some(c => c.futures === 'XMRUSDT') ? 'Not in top 100' : 'Unknown'
       }
     };
 
@@ -1088,7 +1111,7 @@ app.get('/api/info', async (req, res) => {
     ma_periods: [100, 300],
     ema_periods: [13, 25, 32, 200],
     total_coins: coins.length,
-    top_5_by_volume: coins.slice(0, 5),
+    top_5_by_volume: coins.slice(0, 5).map(c => c.futures),
     examples: [
       // Scan queries
       '4hEMA200 volume>5M',
@@ -1274,7 +1297,7 @@ app.get('/api/coins', async (req, res) => {
   try {
     const coins = await getCoins(100);
     res.json({
-      coins: coins.map(c => c.replace('USDT', ''))
+      coins: coins.map(c => c.futures.replace('USDT', ''))
     });
   } catch (error) {
     res.status(500).json({

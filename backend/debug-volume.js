@@ -8,7 +8,8 @@ async function debugVolume() {
   console.log('=== Debugging Volume for BTC 4h ===\n');
 
   try {
-    const url = 'https://fapi.binance.com/fapi/v1/klines';
+    // Using Spot API for higher rate limits
+    const url = 'https://api.binance.com/api/v3/klines';
     const response = await axios.get(url, {
       params: {
         symbol: 'BTCUSDT',
