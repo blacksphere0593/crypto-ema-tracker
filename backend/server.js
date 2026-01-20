@@ -176,6 +176,91 @@ const apiFailures = {
 // Helper to add delay between batches
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Map Binance intervals to Bybit intervals
+const BYBIT_INTERVALS = {
+  '15m': '15',
+  '1h': '60',
+  '2h': '120',
+  '4h': '240',
+  '12h': '720',
+  '1d': 'D',
+  '3d': 'D',  // Bybit doesn't have 3d, use daily
+  '1w': 'W'
+};
+
+/**
+ * Check if klines data is stale (last candle older than expected)
+ */
+function isDataStale(klines, interval) {
+  if (!klines || klines.length === 0) return true;
+
+  const lastCandleTime = klines[klines.length - 1][0];
+  const now = Date.now();
+
+  // Expected max age based on interval (with buffer)
+  const maxAge = {
+    '15m': 30 * 60 * 1000,      // 30 min
+    '1h': 2 * 60 * 60 * 1000,   // 2 hours
+    '2h': 4 * 60 * 60 * 1000,   // 4 hours
+    '4h': 8 * 60 * 60 * 1000,   // 8 hours
+    '12h': 24 * 60 * 60 * 1000, // 24 hours
+    '1d': 48 * 60 * 60 * 1000,  // 48 hours
+    '3d': 6 * 24 * 60 * 60 * 1000, // 6 days
+    '1w': 14 * 24 * 60 * 60 * 1000 // 14 days
+  };
+
+  const threshold = maxAge[interval] || 48 * 60 * 60 * 1000;
+  return (now - lastCandleTime) > threshold;
+}
+
+/**
+ * Fetch klines from Bybit as fallback
+ */
+async function getKlinesFromBybit(symbol, interval, limit) {
+  try {
+    const bybitInterval = BYBIT_INTERVALS[interval] || 'D';
+    const url = 'https://api.bybit.com/v5/market/kline';
+    const response = await axios.get(url, {
+      params: {
+        category: 'linear',
+        symbol: symbol,
+        interval: bybitInterval,
+        limit: Math.min(limit, 1000)
+      },
+      timeout: 10000
+    });
+
+    if (response.data.retCode !== 0) {
+      return null;
+    }
+
+    // Convert Bybit format to Binance format
+    // Bybit: [startTime, open, high, low, close, volume, turnover]
+    // Binance: [openTime, open, high, low, close, volume, closeTime, quoteVolume, trades, takerBuyBase, takerBuyQuote, ignore]
+    const bybitKlines = response.data.result.list;
+
+    // Bybit returns newest first, reverse to match Binance order (oldest first)
+    const binanceFormat = bybitKlines.reverse().map(k => [
+      parseInt(k[0]),           // openTime
+      k[1],                     // open
+      k[2],                     // high
+      k[3],                     // low
+      k[4],                     // close
+      k[5],                     // volume
+      parseInt(k[0]) + 86400000, // closeTime (approximate)
+      k[6],                     // quoteVolume (turnover)
+      0,                        // trades
+      '0',                      // takerBuyBase
+      '0',                      // takerBuyQuote
+      '0'                       // ignore
+    ]);
+
+    return binanceFormat;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function getKlines(symbol, interval = '1d', limit = 500) {
   const cacheKey = `${symbol}_${interval}_${limit}`;
   const cached = klinesCache.get(cacheKey);
@@ -185,9 +270,11 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
     return cached.data;
   }
 
+  let klines = null;
+
+  // Try Binance Spot first
   try {
     const binanceInterval = BINANCE_INTERVALS[interval] || interval;
-    // Use SPOT API for klines (6000 weight/min vs Futures 2400 weight/min)
     const url = `https://api.binance.com/api/v3/klines`;
     const response = await axios.get(url, {
       params: {
@@ -198,36 +285,48 @@ async function getKlines(symbol, interval = '1d', limit = 500) {
       timeout: 10000
     });
 
-    // Cache the result
-    klinesCache.set(cacheKey, {
-      data: response.data,
-      timestamp: Date.now()
-    });
+    klines = response.data;
 
-    return response.data;
+    // Check if data is stale (like XMR which was delisted)
+    if (isDataStale(klines, interval)) {
+      console.log(`[STALE DATA] ${symbol} - Binance Spot data is outdated, trying Bybit`);
+      klines = null; // Force fallback to Bybit
+    }
   } catch (error) {
-    // Detailed error tracking
     if (error.response) {
       const status = error.response.status;
       if (status === 429 || status === 418) {
         apiFailures.rateLimits++;
-        console.error(`[RATE LIMIT] ${symbol} ${interval}: ${status} - ${error.response.data?.msg || error.message}`);
       } else if (status === 400) {
         apiFailures.notFound++;
-        // Don't log 400s (usually just invalid symbol) to reduce noise
       } else {
         apiFailures.other++;
-        console.error(`[API ERROR] ${symbol} ${interval}: ${status} - ${error.message}`);
       }
     } else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
       apiFailures.timeouts++;
-      console.error(`[TIMEOUT] ${symbol} ${interval}: ${error.message}`);
     } else {
       apiFailures.other++;
-      console.error(`[ERROR] ${symbol} ${interval}: ${error.message}`);
     }
-    return null;
   }
+
+  // Fallback to Bybit if Binance failed or returned stale data
+  if (!klines || klines.length === 0) {
+    klines = await getKlinesFromBybit(symbol, interval, limit);
+    if (klines && klines.length > 0) {
+      console.log(`[BYBIT FALLBACK] ${symbol} - Using Bybit klines`);
+    }
+  }
+
+  // Cache the result if we got data
+  if (klines && klines.length > 0) {
+    klinesCache.set(cacheKey, {
+      data: klines,
+      timestamp: Date.now()
+    });
+    return klines;
+  }
+
+  return null;
 }
 
 /**
