@@ -162,7 +162,7 @@ function detectClusterSupportResistance(closePrices, emaValues13, emaValues25, e
  */
 // Simple in-memory cache for klines data
 const klinesCache = new Map();
-const CACHE_TTL = 60000; // 60 seconds - Spot API has higher rate limits
+const CACHE_TTL = 180000; // 3 minutes - safe since we use last closed candle
 
 // Track API failures for diagnostics
 const apiFailures = {
@@ -172,9 +172,6 @@ const apiFailures = {
   other: 0,
   lastReset: Date.now()
 };
-
-// Helper to add delay between batches
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Map Binance intervals to Bybit intervals
 const BYBIT_INTERVALS = {
