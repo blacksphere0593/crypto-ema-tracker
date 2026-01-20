@@ -160,9 +160,9 @@ function detectClusterSupportResistance(closePrices, emaValues13, emaValues25, e
  * @param {number} limit - Number of candles to fetch (max 1000)
  * @returns {Promise<Array|null>} - Klines data or null on error
  */
-// Simple in-memory cache for klines data (60 second TTL)
+// Simple in-memory cache for klines data (5 minute TTL to reduce API calls)
 const klinesCache = new Map();
-const CACHE_TTL = 60000; // 60 seconds
+const CACHE_TTL = 300000; // 5 minutes - aggressive caching to avoid rate limits
 
 // Track API failures for diagnostics
 const apiFailures = {
@@ -172,6 +172,9 @@ const apiFailures = {
   other: 0,
   lastReset: Date.now()
 };
+
+// Helper to add delay between batches
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function getKlines(symbol, interval = '1d', limit = 500) {
   const cacheKey = `${symbol}_${interval}_${limit}`;
@@ -624,9 +627,10 @@ async function handleIndicatorPositioning(parsed, res) {
   // Get top 100 coins
   const coins = await getCoins(100);
 
-  // Fetch data for all coins in batches (with caching, we can use larger batches)
+  // Fetch data for all coins in small batches with delays to avoid rate limits
   const startTime = Date.now();
-  const BATCH_SIZE = 25;
+  const BATCH_SIZE = 5;
+  const BATCH_DELAY = 500;
   const results = [];
 
   for (let i = 0; i < coins.length; i += BATCH_SIZE) {
@@ -634,6 +638,10 @@ async function handleIndicatorPositioning(parsed, res) {
     const batchPromises = batch.map(symbol => getCoinData(symbol, parsed.indicators));
     const batchResults = await Promise.all(batchPromises);
     results.push(...batchResults);
+
+    if (i + BATCH_SIZE < coins.length) {
+      await delay(BATCH_DELAY);
+    }
   }
   const fetchTime = Date.now() - startTime;
 
@@ -871,16 +879,25 @@ app.post('/api/query', async (req, res) => {
       ind => ind.comparison === 'at' || ind.supportResistanceFilter
     );
 
-    // Fetch data for all coins in batches (with caching, we can use larger batches)
+    // Fetch data for all coins in small batches with delays to avoid rate limits
+    // Binance Futures has strict rate limits and Render's shared IPs get banned easily
     const startTime = Date.now();
-    const BATCH_SIZE = 25; // 25 concurrent requests is safe (Binance allows 40/sec)
+    const BATCH_SIZE = 5; // Very small batches to avoid rate limits
+    const BATCH_DELAY = 500; // 500ms delay between batches
     const results = [];
+
+    console.log(`Processing ${coins.length} coins in batches of ${BATCH_SIZE} with ${BATCH_DELAY}ms delays...`);
 
     for (let i = 0; i < coins.length; i += BATCH_SIZE) {
       const batch = coins.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(symbol => getCoinData(symbol, indicators, needsSupportResistance));
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
+
+      // Add delay between batches (except for last batch)
+      if (i + BATCH_SIZE < coins.length) {
+        await delay(BATCH_DELAY);
+      }
     }
     const fetchTime = Date.now() - startTime;
 
