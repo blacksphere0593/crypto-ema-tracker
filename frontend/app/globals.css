@@ -43,20 +43,18 @@ input, textarea {
 @media all and (display-mode: standalone) {
   /* Add padding for notch/dynamic island */
   .pwa-header {
-    padding-top: max(var(--sat), 12px);
+    padding-top: var(--sat);
   }
 
   /* Add padding for home indicator */
   .pwa-footer {
-    padding-bottom: max(var(--sab), 12px);
+    padding-bottom: calc(var(--sab) + 8px);
+    margin-bottom: 0 !important;
   }
 
   /* Full height accounting for safe areas */
   .pwa-container {
-    min-height: 100vh;
     min-height: 100dvh;
-    padding-top: var(--sat);
-    padding-bottom: var(--sab);
     padding-left: var(--sal);
     padding-right: var(--sar);
   }

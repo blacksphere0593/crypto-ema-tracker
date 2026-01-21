@@ -413,7 +413,7 @@ export default function Home() {
         </div>
 
         {/* Input Form */}
-        <div className="flex-shrink-0 mx-4 mb-4 p-3 bg-neutral-900/80 border border-neutral-800 border-t-0 rounded-2xl rounded-t-none pwa-footer">
+        <div className="flex-shrink-0 mx-4 mb-2 p-3 bg-neutral-900/80 border border-neutral-800 border-t-0 rounded-2xl rounded-t-none pwa-footer">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               ref={inputRef}
