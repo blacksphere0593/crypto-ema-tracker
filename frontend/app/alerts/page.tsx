@@ -239,9 +239,9 @@ export default function AlertsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+      <div className="h-[100dvh] bg-neutral-950 flex items-center justify-center pwa-container">
         <div className="flex items-center gap-3 text-neutral-400">
-          <div className="w-5 h-5 border-2 border-neutral-700 border-t-emerald-500 rounded-full animate-spin"></div>
+          <div className="spinner"></div>
           Loading alerts...
         </div>
       </div>
@@ -249,189 +249,187 @@ export default function AlertsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+    <div className="h-[100dvh] flex flex-col bg-neutral-950 text-neutral-100 pwa-container">
       {/* Header */}
-      <header className="border-b border-neutral-800">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="flex-shrink-0 border-b border-neutral-800 glass pwa-header">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link
             href="/"
-            className="text-neutral-400 hover:text-neutral-200 transition-colors flex items-center gap-2 text-sm"
+            className="touch-target flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200 active:bg-neutral-800 rounded-lg transition-colors haptic-press"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Back
+            <span className="hidden sm:inline">Back</span>
           </Link>
-          <h1 className="text-lg font-semibold text-neutral-100">Alerts</h1>
+          <h1 className="text-base font-semibold text-neutral-100">Alerts</h1>
           <div className="w-16"></div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* Telegram Setup */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-          <h2 className="text-sm font-medium text-neutral-300 mb-4">Telegram Setup</h2>
+      <main className="flex-1 overflow-y-auto chat-scroll hide-scrollbar-mobile">
+        <div className="max-w-4xl mx-auto px-4 py-4 space-y-4 pb-8">
+          {/* Telegram Setup */}
+          <section className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4">
+            <h2 className="text-sm font-medium text-neutral-300 mb-3">Telegram</h2>
 
-          <div className="flex gap-2 mb-4">
-            <input
-              type="text"
-              value={telegramToken}
-              onChange={(e) => setTelegramToken(e.target.value)}
-              placeholder="Bot Token (from @BotFather)"
-              className="flex-1 px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 placeholder-neutral-500 text-sm"
-            />
-            <button
-              onClick={saveTelegramToken}
-              disabled={saving || !telegramToken.trim()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              Save
-            </button>
-          </div>
-
-          <div className="flex items-center gap-4 text-xs">
-            <span className={`flex items-center gap-1.5 ${telegramStatus.configured ? 'text-emerald-400' : 'text-neutral-500'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${telegramStatus.configured ? 'bg-emerald-400' : 'bg-neutral-600'}`}></span>
-              Token configured
-            </span>
-            <span className={`flex items-center gap-1.5 ${telegramStatus.connected ? 'text-emerald-400' : 'text-neutral-500'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${telegramStatus.connected ? 'bg-emerald-400' : 'bg-neutral-600'}`}></span>
-              Bot connected
-              {telegramStatus.chatId && <span className="text-neutral-600">({telegramStatus.chatId})</span>}
-            </span>
-          </div>
-
-          {!telegramStatus.connected && telegramStatus.configured && (
-            <p className="mt-3 text-amber-500/80 text-xs">
-              Send <code className="bg-neutral-800 px-1.5 py-0.5 rounded">/start</code> to your bot in Telegram
-            </p>
-          )}
-
-          {!telegramStatus.configured && (
-            <div className="mt-4 text-neutral-500 text-xs">
-              <p className="font-medium text-neutral-400 mb-2">Setup instructions:</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Open Telegram, search @BotFather</li>
-                <li>Send /newbot and follow prompts</li>
-                <li>Copy the bot token and paste above</li>
-                <li>Send /start to your new bot</li>
-              </ol>
-            </div>
-          )}
-        </section>
-
-        {/* Settings */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-          <h2 className="text-sm font-medium text-neutral-300 mb-4">Settings</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Timezone</label>
-              <select
-                value={settings.timezone}
-                onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
-              >
-                {TIMEZONES.map(tz => (
-                  <option key={tz} value={tz}>{tz}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Quiet Hours Start</label>
+            <div className="flex gap-2 mb-3">
               <input
-                type="time"
-                value={settings.quietHoursStart}
-                onChange={(e) => setSettings({ ...settings, quietHoursStart: e.target.value })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
+                type="text"
+                value={telegramToken}
+                onChange={(e) => setTelegramToken(e.target.value)}
+                placeholder="Bot Token (from @BotFather)"
+                className="flex-1 px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 placeholder-neutral-500 text-sm"
               />
-            </div>
-
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Quiet Hours End</label>
-              <input
-                type="time"
-                value={settings.quietHoursEnd}
-                onChange={(e) => setSettings({ ...settings, quietHoursEnd: e.target.value })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 flex justify-between items-center">
-            <p className="text-neutral-600 text-xs">
-              No alerts during {settings.quietHoursStart} - {settings.quietHoursEnd}
-            </p>
-            <button
-              onClick={saveSettings}
-              disabled={saving}
-              className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-neutral-200 rounded-lg text-sm font-medium transition-colors"
-            >
-              Save Settings
-            </button>
-          </div>
-        </section>
-
-        {/* Create New Alert */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-          <h2 className="text-sm font-medium text-neutral-300 mb-4">Create Alert</h2>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Coin</label>
-              <select
-                value={newAlert.coin}
-                onChange={(e) => setNewAlert({ ...newAlert, coin: e.target.value })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
+              <button
+                onClick={saveTelegramToken}
+                disabled={saving || !telegramToken.trim()}
+                className="touch-target px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-neutral-700 disabled:text-neutral-500 text-white rounded-xl text-sm font-medium transition-colors haptic-press"
               >
-                {coins.map(coin => (
-                  <option key={coin} value={coin}>{coin === 'any' ? 'Any coin' : coin}</option>
-                ))}
-              </select>
+                Save
+              </button>
             </div>
 
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Condition</label>
-              <select
-                value={newAlert.condition}
-                onChange={(e) => setNewAlert({ ...newAlert, condition: e.target.value as 'above' | 'below' | 'at' })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className={`flex items-center gap-1.5 ${telegramStatus.configured ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${telegramStatus.configured ? 'bg-emerald-400' : 'bg-neutral-600'}`}></span>
+                Token set
+              </span>
+              <span className={`flex items-center gap-1.5 ${telegramStatus.connected ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${telegramStatus.connected ? 'bg-emerald-400' : 'bg-neutral-600'}`}></span>
+                Connected
+                {telegramStatus.chatId && <span className="text-neutral-600">({telegramStatus.chatId})</span>}
+              </span>
+            </div>
+
+            {!telegramStatus.connected && telegramStatus.configured && (
+              <p className="mt-3 text-amber-500/80 text-xs">
+                Send <code className="bg-neutral-800 px-1.5 py-0.5 rounded">/start</code> to your bot
+              </p>
+            )}
+
+            {!telegramStatus.configured && (
+              <div className="mt-3 text-neutral-500 text-xs">
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Message @BotFather on Telegram</li>
+                  <li>Send /newbot and follow prompts</li>
+                  <li>Paste token above, then /start your bot</li>
+                </ol>
+              </div>
+            )}
+          </section>
+
+          {/* Settings */}
+          <section className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4">
+            <h2 className="text-sm font-medium text-neutral-300 mb-3">Settings</h2>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Timezone</label>
+                <select
+                  value={settings.timezone}
+                  onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                >
+                  {TIMEZONES.map(tz => (
+                    <option key={tz} value={tz}>{tz.split('/')[1] || tz}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Quiet Start</label>
+                <input
+                  type="time"
+                  value={settings.quietHoursStart}
+                  onChange={(e) => setSettings({ ...settings, quietHoursStart: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Quiet End</label>
+                <input
+                  type="time"
+                  value={settings.quietHoursEnd}
+                  onChange={(e) => setSettings({ ...settings, quietHoursEnd: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 flex justify-between items-center">
+              <p className="text-neutral-600 text-xs">
+                No alerts {settings.quietHoursStart}-{settings.quietHoursEnd}
+              </p>
+              <button
+                onClick={saveSettings}
+                disabled={saving}
+                className="touch-target px-4 py-2 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 disabled:opacity-50 text-neutral-200 rounded-xl text-sm font-medium transition-colors haptic-press"
               >
-                {CONDITIONS.map(c => (
-                  <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                ))}
-              </select>
+                Save
+              </button>
+            </div>
+          </section>
+
+          {/* Create New Alert */}
+          <section className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4">
+            <h2 className="text-sm font-medium text-neutral-300 mb-3">New Alert</h2>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Coin</label>
+                <select
+                  value={newAlert.coin}
+                  onChange={(e) => setNewAlert({ ...newAlert, coin: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                >
+                  {coins.map(coin => (
+                    <option key={coin} value={coin}>{coin === 'any' ? 'Any' : coin}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Condition</label>
+                <select
+                  value={newAlert.condition}
+                  onChange={(e) => setNewAlert({ ...newAlert, condition: e.target.value as 'above' | 'below' | 'at' })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                >
+                  {CONDITIONS.map(c => (
+                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Timeframe</label>
+                <select
+                  value={newAlert.timeframe}
+                  onChange={(e) => setNewAlert({ ...newAlert, timeframe: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                >
+                  {TIMEFRAMES.map(tf => (
+                    <option key={tf} value={tf}>{tf}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">Frequency</label>
+                <select
+                  value={newAlert.frequency}
+                  onChange={(e) => setNewAlert({ ...newAlert, frequency: e.target.value as 'once' | 'repeat' })}
+                  className="w-full px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
+                >
+                  <option value="once">Once</option>
+                  <option value="repeat">Repeat</option>
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Timeframe</label>
-              <select
-                value={newAlert.timeframe}
-                onChange={(e) => setNewAlert({ ...newAlert, timeframe: e.target.value })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
-              >
-                {TIMEFRAMES.map(tf => (
-                  <option key={tf} value={tf}>{tf}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-neutral-500 text-xs mb-1.5">Frequency</label>
-              <select
-                value={newAlert.frequency}
-                onChange={(e) => setNewAlert({ ...newAlert, frequency: e.target.value as 'once' | 'repeat' })}
-                className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
-              >
-                <option value="once">Once</option>
-                <option value="repeat">Repeat</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div className="col-span-2">
+            <div className="flex flex-wrap items-center gap-4 mb-3">
               <label className="flex items-center gap-2 text-neutral-400 text-sm cursor-pointer">
                 <input
                   type="checkbox"
@@ -439,119 +437,112 @@ export default function AlertsPage() {
                   onChange={(e) => setNewAlert({ ...newAlert, useTrend: e.target.checked })}
                   className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
                 />
-                Use Trend (EMA 13/25/32)
+                Trend (EMA 13/25/32)
               </label>
-            </div>
 
-            {!newAlert.useTrend && (
-              <>
-                <div>
-                  <label className="block text-neutral-500 text-xs mb-1.5">Indicator</label>
+              {!newAlert.useTrend && (
+                <div className="flex items-center gap-2">
                   <select
                     value={newAlert.indicator}
                     onChange={(e) => setNewAlert({ ...newAlert, indicator: e.target.value })}
-                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
+                    className="px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
                   >
                     {INDICATORS.map(ind => (
                       <option key={ind} value={ind}>{ind.toUpperCase()}</option>
                     ))}
                   </select>
-                </div>
-
-                <div>
-                  <label className="block text-neutral-500 text-xs mb-1.5">Period</label>
                   <select
                     value={newAlert.period}
                     onChange={(e) => setNewAlert({ ...newAlert, period: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
+                    className="px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
                   >
                     {PERIODS.map(p => (
                       <option key={p} value={p}>{p}</option>
                     ))}
                   </select>
                 </div>
-              </>
-            )}
-          </div>
-
-          {newAlert.condition === 'at' && (
-            <div className="mb-4">
-              <label className="block text-neutral-500 text-xs mb-1.5">S/R Filter (optional)</label>
-              <select
-                value={newAlert.srFilter}
-                onChange={(e) => setNewAlert({ ...newAlert, srFilter: e.target.value as '' | 'support' | 'resistance' })}
-                className="w-full md:w-48 px-3 py-2 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg focus:outline-none focus:border-neutral-600 text-sm"
-              >
-                <option value="">None</option>
-                <option value="support">Support</option>
-                <option value="resistance">Resistance</option>
-              </select>
+              )}
             </div>
-          )}
 
-          <button
-            onClick={createAlert}
-            disabled={saving || !telegramStatus.connected}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-neutral-700 disabled:text-neutral-500 text-white rounded-lg font-medium text-sm transition-colors"
-          >
-            {saving ? 'Creating...' : 'Create Alert'}
-          </button>
-
-          {!telegramStatus.connected && (
-            <p className="mt-2 text-amber-500/80 text-xs">Connect Telegram first</p>
-          )}
-        </section>
-
-        {/* Active Alerts */}
-        <section className="bg-neutral-900 border border-neutral-800 rounded-lg p-5">
-          <h2 className="text-sm font-medium text-neutral-300 mb-4">
-            Alerts <span className="text-neutral-500 font-normal">({alerts.filter(a => a.enabled).length} active)</span>
-          </h2>
-
-          {alerts.length === 0 ? (
-            <p className="text-neutral-600 text-sm text-center py-6">No alerts configured</p>
-          ) : (
-            <div className="space-y-2">
-              {alerts.map(alert => (
-                <div
-                  key={alert.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${
-                    alert.enabled
-                      ? 'bg-neutral-800/50 border-neutral-700'
-                      : 'bg-neutral-800/20 border-neutral-800 opacity-50'
-                  }`}
+            {newAlert.condition === 'at' && (
+              <div className="mb-3">
+                <label className="block text-neutral-500 text-[10px] uppercase tracking-wider mb-1">S/R Filter</label>
+                <select
+                  value={newAlert.srFilter}
+                  onChange={(e) => setNewAlert({ ...newAlert, srFilter: e.target.value as '' | 'support' | 'resistance' })}
+                  className="w-full sm:w-40 px-3 py-2.5 bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-xl focus:outline-none focus:border-emerald-500/50 text-sm"
                 >
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={alert.enabled}
-                      onChange={(e) => toggleAlert(alert.id, e.target.checked)}
-                      className="w-4 h-4 rounded border-neutral-600 bg-neutral-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
-                    />
-                    <div>
-                      <p className="text-neutral-200 text-sm">{formatAlert(alert)}</p>
-                      <p className="text-neutral-600 text-xs">
-                        {alert.frequency === 'once' ? 'One-time' : 'Repeating'}
-                        {alert.lastTriggered && ` · Last: ${new Date(alert.lastTriggered).toLocaleString()}`}
-                      </p>
-                    </div>
-                  </div>
+                  <option value="">None</option>
+                  <option value="support">Support</option>
+                  <option value="resistance">Resistance</option>
+                </select>
+              </div>
+            )}
 
-                  <button
-                    onClick={() => deleteAlert(alert.id)}
-                    className="px-2 py-1 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors text-xs"
+            <button
+              onClick={createAlert}
+              disabled={saving || !telegramStatus.connected}
+              className="touch-target w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-neutral-700 disabled:text-neutral-500 text-white rounded-xl font-medium text-sm transition-colors haptic-press"
+            >
+              {saving ? 'Creating...' : 'Create Alert'}
+            </button>
+
+            {!telegramStatus.connected && (
+              <p className="mt-2 text-amber-500/80 text-xs text-center">Connect Telegram first</p>
+            )}
+          </section>
+
+          {/* Active Alerts */}
+          <section className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4">
+            <h2 className="text-sm font-medium text-neutral-300 mb-3">
+              Alerts <span className="text-neutral-500 font-normal">({alerts.filter(a => a.enabled).length} active)</span>
+            </h2>
+
+            {alerts.length === 0 ? (
+              <p className="text-neutral-600 text-sm text-center py-6">No alerts configured</p>
+            ) : (
+              <div className="space-y-2">
+                {alerts.map(alert => (
+                  <div
+                    key={alert.id}
+                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                      alert.enabled
+                        ? 'bg-neutral-800/50 border-neutral-700'
+                        : 'bg-neutral-800/20 border-neutral-800 opacity-50'
+                    }`}
                   >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={alert.enabled}
+                        onChange={(e) => toggleAlert(alert.id, e.target.checked)}
+                        className="flex-shrink-0 w-4 h-4 rounded border-neutral-600 bg-neutral-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-neutral-200 text-sm truncate">{formatAlert(alert)}</p>
+                        <p className="text-neutral-600 text-xs">
+                          {alert.frequency === 'once' ? 'Once' : 'Repeat'}
+                          {alert.lastTriggered && ` · ${new Date(alert.lastTriggered).toLocaleDateString()}`}
+                        </p>
+                      </div>
+                    </div>
 
-        <p className="text-center text-neutral-600 text-xs">
-          Alerts checked every 5 minutes at :01, :06, :11...
-        </p>
+                    <button
+                      onClick={() => deleteAlert(alert.id)}
+                      className="flex-shrink-0 touch-target flex items-center justify-center px-3 py-2 text-neutral-500 hover:text-red-400 active:bg-red-500/10 rounded-lg transition-colors text-xs haptic-press"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <p className="text-center text-neutral-600 text-xs pb-4">
+            Checked every 5 min at :01, :06, :11...
+          </p>
+        </div>
       </main>
     </div>
   );
