@@ -185,24 +185,25 @@ export default function Home() {
         {/* Collapsible Help Panel */}
         {showHelp && (
           <div className="flex-shrink-0 mx-4 mt-4 p-4 bg-neutral-900/80 border border-neutral-800 rounded-xl text-sm animate-fade-in">
-            <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="space-y-3 mb-3">
               <div>
-                <p className="text-neutral-500 text-[10px] uppercase tracking-wider mb-0.5">Timeframes</p>
-                <p className="text-neutral-300 font-mono text-xs">15m 1h 4h 1d 1w</p>
+                <p className="text-neutral-500 text-[11px] uppercase tracking-wider mb-1">Timeframes</p>
+                <p className="text-neutral-300 font-mono text-xs">15m · 1h · 2h · 4h · 12h · 1d · 3d · 1w</p>
               </div>
-              <div>
-                <p className="text-neutral-500 text-[10px] uppercase tracking-wider mb-0.5">MA</p>
-                <p className="text-neutral-300 font-mono text-xs">100, 300</p>
-              </div>
-              <div>
-                <p className="text-neutral-500 text-[10px] uppercase tracking-wider mb-0.5">EMA</p>
-                <p className="text-neutral-300 font-mono text-xs">13, 25, 32, 200</p>
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-neutral-500 text-[11px] uppercase tracking-wider mb-1">MA</p>
+                  <p className="text-neutral-300 font-mono text-xs">100, 300</p>
+                </div>
+                <div>
+                  <p className="text-neutral-500 text-[11px] uppercase tracking-wider mb-1">EMA</p>
+                  <p className="text-neutral-300 font-mono text-xs">13, 25, 32, 200</p>
+                </div>
               </div>
             </div>
-            <div className="pt-3 border-t border-neutral-800 text-xs text-neutral-500">
-              <span className="text-emerald-500">trend</span> = EMA 13/25/32 cluster &nbsp;·&nbsp;
-              <span className="text-emerald-500">S</span> = support &nbsp;·&nbsp;
-              <span className="text-red-500">R</span> = resistance
+            <div className="pt-3 border-t border-neutral-800 text-xs text-neutral-500 space-y-1">
+              <p><span className="text-emerald-500">trend</span> = EMA 13/25/32 cluster</p>
+              <p><span className="text-emerald-500">S</span> = support · <span className="text-red-500">R</span> = resistance</p>
             </div>
           </div>
         )}
